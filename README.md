@@ -67,13 +67,13 @@ You can modify parameters:
 OUTPUT FILES
 ---------------------------------
 All results are saved automatically in the project folder:  
-
+```bash
 • <ticker>_kc.csv → data with indicator and signals  
 • trades_<ticker>.csv → detailed trade log  
 • <ticker>_kc.png → price chart with Keltner Channel  
 • <ticker>_equity.png → equity growth chart  
 • <ticker>_drawdown.png → drawdown (loss) chart  
-
+```
 ---------------------------------
 HOW IT WORKS
 ---------------------------------
