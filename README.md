@@ -99,10 +99,12 @@ The program will ask for:
 - Fees, slippage, output folder 
 ```
 
-Option 2: Command-Line Mode  ```bash
+Option 2: Command-Line Mode  
+```bash
 python run_backtest.py --ticker AAPL --period 5y --ema 20 --atr 10 --mult 2.0 \
   --risk 0.01 --stop 2.0 --tp 4.0 --side long_short --execution next_open \
-  --fee_bps 1 --slip_bps 2 --outdir out ```
+  --fee_bps 1 --slip_bps 2 --outdir out 
+  ```
 
 ---------------------------------
 SUGGESTED PARAMETERS (BITCOIN EXAMPLE) 
