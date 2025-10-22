@@ -17,6 +17,7 @@ WHAT THIS PROJECT DOES
 ---------------------------------
 PROJECT STRUCTURE
 ---------------------------------
+```bash
 project/
 |
 ├─ backtester.py      → runs the backtesting engine  
@@ -29,7 +30,7 @@ project/
 ├─ README.md          → documentation (this file)  
 ├─ LICENSE            → MIT license for open usage  
 └─ .gitignore         → ignores unnecessary files in version control  
-
+```
 ---------------------------------
 INSTALLATION
 ---------------------------------
