@@ -1,94 +1,126 @@
 KELTNER CHANNEL INDICATOR PROJECT
+---------------------------------
 
-This project calculates the Keltner Channel indicator and tests how a basic trading idea using it would perform.
+A Python project to calculate and backtest the Keltner Channel — a volatility-based trading indicator.  
+It downloads real stock data, generates trading signals, simulates trades with realistic costs,  
+and visualizes results with clear charts and performance metrics.
 
-WHAT IT DOES
-- Downloads stock data automatically using yfinance
-- Calculates the Keltner Channel which consists of three lines:
-  - A middle line that is an Exponential Moving Average (EMA)
-  - An upper and a lower line that are based on Average True Range (ATR)
-- Generates buy and sell points based on price crossing these lines
-- Simulates trades and shows results with profits, losses, and charts
+---------------------------------
+WHAT THIS PROJECT DOES
+---------------------------------
+• Downloads stock data using yfinance  
+• Calculates the Keltner Channel (EMA as middle line, ATR-based upper and lower bands)  
+• Generates buy and sell signals based on price breakouts  
+• Runs a backtest that simulates trades with transaction costs and slippage  
+• Saves detailed trade results, indicator data, and performance charts  
 
-FOLDER STRUCTURE
-src/
+---------------------------------
+PROJECT STRUCTURE
+---------------------------------
+project/
 │
-├─ data.py          → downloads and cleans stock data
-├─ indicators.py    → calculates EMA, ATR, and Keltner Channel
-├─ strategy.py      → defines buy and sell logic
-├─ backtester.py    → simulates trades over historical data
-├─ plotting.py      → makes graphs for visualization
-├─ run_backtest.py  → main file that connects everything
-├─ out/             → saves all outputs like csv and charts
-└─ requirements.txt → contains list of required python libraries
+├─ backtester.py      → runs the backtesting engine  
+├─ data.py            → fetches and prepares stock data  
+├─ indicators.py      → calculates EMA, ATR, and Keltner Channels  
+├─ plotting.py        → plots price, equity, and drawdown charts  
+├─ run_backtest.py    → main script to execute the full process  
+├─ strategy.py        → defines buy and sell conditions  
+├─ requirements.txt   → required Python libraries  
+├─ README.md          → documentation (this file)  
+├─ LICENSE            → MIT license for open usage  
+└─ .gitignore         → ignores unnecessary files in version control  
 
+---------------------------------
 INSTALLATION
-1. open command prompt or terminal in project folder  
-2. type and run: pip install -r requirements.txt  
+---------------------------------
+1. Open your terminal or command prompt in the project folder.  
+2. Run the command:  
+   pip install -r requirements.txt  
 
+---------------------------------
 USAGE
-To run for Apple stock example:
-python -m src.run_backtest --ticker AAPL --start 2018-01-01 --end 2025-01-01
+---------------------------------
+Run for Apple stock:
+python run_backtest.py --ticker AAPL --start 2018-01-01 --end 2025-01-01  
 
-For Indian stocks example:
-python -m src.run_backtest --ticker RELIANCE.NS --period 5y
+Run for Indian stocks:
+python run_backtest.py --ticker RELIANCE.NS --period 5y  
 
-You can adjust settings:
---ema       number of periods for EMA (default 20)
---atr       number of periods for ATR (default 10)
---mult      multiplier for ATR (default 2)
---risk      capital risk per trade (default 1%)
---stop      stop loss multiple of ATR
---tp        take profit multiple of ATR
---side      choose long_only, short_only or long_short
---fee_bps   transaction fee in basis points (1 bps = 0.01%)
---slip_bps  slippage in basis points
+You can modify parameters:
+--ema       number of periods for EMA (default 20)  
+--atr       number of periods for ATR (default 10)  
+--mult      multiplier for ATR (default 2)  
+--risk      risk per trade as a fraction of capital (default 0.01)  
+--stop      stop loss multiple of ATR  
+--tp        take profit multiple of ATR  
+--side      choose long_only, short_only, or long_short  
+--fee_bps   transaction cost (basis points, 1 bps = 0.01%)  
+--slip_bps  slippage cost (basis points)  
 
-OUTPUT FILES (saved in src/out/)
-<ticker>_kc.csv → data with indicator values and signals  
-trades_<ticker>.csv → all trades with entry, exit, and pnl  
-<ticker>_kc.png → price chart with keltner bands and trades  
-<ticker>_equity.png → total portfolio growth line  
-<ticker>_drawdown.png → shows biggest losses from peaks  
+---------------------------------
+OUTPUT FILES
+---------------------------------
+All results are saved automatically in the project folder:  
 
-HOW IT WORKS STEP BY STEP
-1. Data is downloaded using yfinance (daily open, high, low, close, volume)
-2. Typical Price = (High + Low + Close) / 3
-3. EMA is calculated on this typical price for smoothing
-4. True Range is calculated for each day as the largest of:
-   (High - Low), (High - previous Close), (Low - previous Close)
-5. ATR = EMA of True Range over chosen period
-6. Channel lines are built as:
-   Upper Band = EMA + ATR * multiplier
-   Lower Band = EMA - ATR * multiplier
-7. Buy signal when price crosses above upper band
-8. Sell signal when price crosses below middle line
-9. Backtester simulates entering and exiting trades with given fees and slippage
-10. Final charts show results of trading over time
+• <ticker>_kc.csv → data with indicator and signals  
+• trades_<ticker>.csv → detailed trade log  
+• <ticker>_kc.png → price chart with Keltner Channel  
+• <ticker>_equity.png → equity growth chart  
+• <ticker>_drawdown.png → drawdown (loss) chart  
 
-MEANINGS OF TECHNICAL TERMS
-EMA (Exponential Moving Average) → smooths price data and reacts faster to new prices  
-ATR (Average True Range) → measures how much price moves daily, shows volatility  
-PnL (Profit and Loss) → money gained or lost from each trade  
-Slippage → small difference between expected and actual trade price due to market movement  
-Basis Points → one basis point = 0.01 percent, used to describe small costs  
-Drawdown → drop from portfolio high to next low, shows worst loss from top  
-Sharpe Ratio → return divided by volatility, shows reward per unit of risk  
-CAGR → average yearly growth rate of the portfolio  
+---------------------------------
+HOW IT WORKS
+---------------------------------
+1. Downloads daily OHLC data (Open, High, Low, Close)  
+2. Calculates the typical price: (High + Low + Close) / 3  
+3. Computes EMA (Exponential Moving Average) for smoothing  
+4. Calculates True Range (TR) for volatility:  
+   TR = max(High - Low, |High - PrevClose|, |Low - PrevClose|)  
+5. ATR (Average True Range) = EMA of TR over selected period  
+6. Builds the channel:  
+   Upper Band = EMA + ATR × multiplier  
+   Lower Band = EMA - ATR × multiplier  
+7. Entry and exit logic:  
+   - Buy when price crosses above upper band  
+   - Sell when price crosses below middle line  
+8. The backtester simulates trades, applies costs, and records profits/losses  
+9. Final output shows performance over time  
 
+---------------------------------
+TECHNICAL TERMS (SIMPLE EXPLANATION)
+---------------------------------
+EMA (Exponential Moving Average) → A smooth average giving more weight to recent prices  
+ATR (Average True Range) → Measures daily price volatility or movement range  
+PnL (Profit and Loss) → How much money was made or lost in each trade  
+Slippage → Difference between expected and actual trade price  
+Basis Point (bps) → 0.01%, used to measure small fees  
+Drawdown → Largest fall from portfolio high to low  
+Sharpe Ratio → Measures return versus risk, higher is better  
+CAGR → Compound Annual Growth Rate, average yearly portfolio growth  
+
+---------------------------------
 LIMITATIONS
-- Uses daily data only, no intraday or real-time use  
-- Only one stock tested at a time  
-- Strategy is simple breakout logic, not optimized for all markets  
-- Does not include dividends or corporate events  
+---------------------------------
+• Uses daily data only  
+• Tests one stock at a time  
+• Simple breakout rules (not optimized)  
+• Does not include dividends or split adjustments  
 
-POSSIBLE IMPROVEMENTS
-- Add long-only and trend filters like EMA200  
-- Add trailing stops and partial exits  
-- Allow multiple stocks and portfolio testing  
-- Add optimization to test different parameter combinations  
+---------------------------------
+FUTURE IMPROVEMENTS
+---------------------------------
+• Add long-only and trend filters (like EMA200)  
+• Add trailing stops and re-entry rules  
+• Support multiple stocks and portfolios  
+• Add automatic parameter optimization  
 
+---------------------------------
+LICENSE
+---------------------------------
+MIT License © 2025 Pramit  
+Free to use, modify, and distribute for learning and research purposes.  
+
+---------------------------------
 AUTHOR
-Made by Pramit  
-Language used: Python  
-Goal: learn financial data analysis, indicators, and backtesting from scratch
+---------------------------------
+Developed by Pramit Datta
