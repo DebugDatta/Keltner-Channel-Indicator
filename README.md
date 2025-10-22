@@ -1,130 +1,164 @@
 KELTNER CHANNEL INDICATOR PROJECT
 ---------------------------------
 
-A Python project to calculate and backtest the Keltner Channel — a volatility-based trading indicator.  
-It downloads real stock data, generates trading signals, simulates trades with realistic costs,  
-and visualizes results with clear charts and performance metrics.
+A complete Python project that calculates, visualizes, and backtests the **Keltner Channel** — a volatility-based technical indicator used by traders to identify price trends, breakouts, and potential reversals.
+
+This project uses real market data (via yfinance) to simulate trades, apply risk management, and measure performance metrics like CAGR, Sharpe Ratio, and Drawdown.  
+It is built to help students, traders, and data enthusiasts understand how volatility bands work and how to test a simple yet powerful trading system.
 
 ---------------------------------
-WHAT THIS PROJECT DOES
+WHAT IS THE KELTNER CHANNEL?
 ---------------------------------
-• Downloads stock data using yfinance  
-• Calculates the Keltner Channel (EMA as middle line, ATR-based upper and lower bands)  
-• Generates buy and sell signals based on price breakouts  
-• Runs a backtest that simulates trades with transaction costs and slippage  
-• Saves detailed trade results, indicator data, and performance charts  
+The **Keltner Channel** is a type of trading envelope that adjusts itself based on market volatility.  
+It consists of three lines plotted around the price:
+
+1. **Middle Line (EMA)** – The Exponential Moving Average (EMA) of the closing price over a specific period.  
+2. **Upper Band** – EMA + (Average True Range × Multiplier)  
+3. **Lower Band** – EMA - (Average True Range × Multiplier)
+
+The **Average True Range (ATR)** measures how volatile the market is, while the **Multiplier** controls how wide the channel spreads from the EMA.
+
+Interpretation:
+- When prices move **above the upper band**, it suggests strong upward momentum or a potential breakout.
+- When prices move **below the lower band**, it signals strong downward momentum or a breakdown.
+- Prices oscillating inside the channel indicate a consolidating or range-bound market.
+
+Traders use this indicator to:
+• Identify trend directions  
+• Spot breakouts and reversals  
+• Set dynamic stop losses and profit targets based on volatility  
 
 ---------------------------------
-PROJECT STRUCTURE
+PROJECT OVERVIEW
 ---------------------------------
-```bash
-project/
-|
-├─ backtester.py      → runs the backtesting engine  
-├─ data.py            → fetches and prepares stock data  
-├─ indicators.py      → calculates EMA, ATR, and Keltner Channels  
-├─ plotting.py        → plots price, equity, and drawdown charts  
-├─ run_backtest.py    → main script to execute the full process  
-├─ strategy.py        → defines buy and sell conditions  
-├─ requirements.txt   → required Python libraries  
-├─ README.md          → documentation (this file)  
-├─ LICENSE            → MIT license for open usage  
-└─ .gitignore         → ignores unnecessary files in version control  
-```
+This project automates:
+1. **Data Collection** – Fetches price data from Yahoo Finance.  
+2. **Indicator Calculation** – Computes EMA, ATR, and the Keltner Channel bands.  
+3. **Signal Generation** – Generates buy/sell signals when prices break out of the channel.  
+4. **Backtesting** – Simulates trades using realistic assumptions like fees, slippage, and position sizing.  
+5. **Performance Analysis** – Calculates CAGR, Sharpe, Sortino, Drawdown, and other metrics.  
+6. **Visualization** – Plots the price chart, Keltner Channel, equity curve, and drawdown graph.
+
 ---------------------------------
-INSTALLATION
+KEY FEATURES
 ---------------------------------
-1. Open your terminal or command prompt in the project folder.  
-2. Run the command:
-   ```bash 
+• Supports both **stocks** and **cryptocurrencies** (e.g., AAPL, NVDA, RELIANCE.NS, BTC-USD)  
+• Interactive mode for easy parameter input  
+• Command-line mode for automation  
+• Customizable risk, stop-loss, and take-profit levels  
+• Realistic transaction fees and slippage modeling  
+• Automatically generates performance charts and CSV trade logs  
+
+---------------------------------
+HOW TO SET UP
+---------------------------------
+1. Clone this repository: 
+   ```bash
+   git clone https://github.com/DebugDatta/Keltner-Channel-Indicator.git 
+   ```
+
+3. Enter the folder: 
+   ```bash
+   cd Keltner-Channel-Indicator 
+   ```
+
+4. Create a virtual environment: 
+   ```bash
+   python -m venv venv 
+   ```
+
+5. Activate it:
+    
+   • Windows →
+   ```bash
+   venv\Scripts\activate
+   ```
+   • macOS/Linux →
+   ```bash
+   source venv/bin/activate
+   ```
+
+7. Install dependencies: 
+   ```bash
    pip install -r requirements.txt
-   ``` 
+   ```
 
 ---------------------------------
-USAGE
+HOW TO RUN
 ---------------------------------
-Run for Apple stock:
+Option 1: Interactive Mode  
+python run_backtest.py --interactive  
+The program will ask for: 
 ```bash
-python run_backtest.py --ticker AAPL --start 2018-01-01 --end 2025-01-01  
-```
-Run for Indian stocks:
-```bash
-python run_backtest.py --ticker RELIANCE.NS --period 5y
+- Ticker (AAPL, BTC-USD, RELIANCE.NS, etc.)
+- Date range or period
+- EMA, ATR, Multiplier
+- Risk, Stop loss, Take profit
+- Trade side (long_only, short_only, long_short)
+- Execution mode (next_open, next_close)
+- Fees, slippage, output folder 
 ```
 
-You can modify parameters:
---ema       number of periods for EMA (default 20)  
---atr       number of periods for ATR (default 10)  
---mult      multiplier for ATR (default 2)  
---risk      risk per trade as a fraction of capital (default 0.01)  
---stop      stop loss multiple of ATR  
---tp        take profit multiple of ATR  
---side      choose long_only, short_only, or long_short  
---fee_bps   transaction cost (basis points, 1 bps = 0.01%)  
---slip_bps  slippage cost (basis points)  
+Option 2: Command-Line Mode  ```bash
+python run_backtest.py --ticker AAPL --period 5y --ema 20 --atr 10 --mult 2.0 \
+  --risk 0.01 --stop 2.0 --tp 4.0 --side long_short --execution next_open \
+  --fee_bps 1 --slip_bps 2 --outdir out ```
+
+---------------------------------
+SUGGESTED PARAMETERS (BITCOIN EXAMPLE) 
+---------------------------------
+```bash
+python run_backtest.py --ticker BTC-USD --start 2017-01-01 --end 2025-01-01 \
+  --ema 30 --atr 20 --mult 3.0 --risk 0.015 --stop 3.0 --tp 5.0 \
+  --side long_only --execution next_close --fee_bps 10 --slip_bps 15 --warmup 60 --outdir out_btc
+  ```
 
 ---------------------------------
 OUTPUT FILES
 ---------------------------------
-All results are saved automatically in the project folder:  
+All results are automatically saved in your output folder:
 ```bash
-• <ticker>_kc.csv → data with indicator and signals  
-• trades_<ticker>.csv → detailed trade log  
-• <ticker>_kc.png → price chart with Keltner Channel  
-• <ticker>_equity.png → equity growth chart  
-• <ticker>_drawdown.png → drawdown (loss) chart  
+• <ticker>_kc.csv → Data with indicators and signals  
+• trades_<ticker>.csv → Detailed trade logs (entries, exits, PnL)  
+• <ticker>_kc.png → Price chart with Keltner Channel  
+• <ticker>_equity.png → Portfolio growth chart  
+• <ticker>_drawdown.png → Drawdown curve  
 ```
----------------------------------
-HOW IT WORKS
----------------------------------
-1. Downloads daily OHLC data (Open, High, Low, Close)  
-2. Calculates the typical price: (High + Low + Close) / 3  
-3. Computes EMA (Exponential Moving Average) for smoothing  
-4. Calculates True Range (TR) for volatility:  
-   TR = max(High - Low, |High - PrevClose|, |Low - PrevClose|)  
-5. ATR (Average True Range) = EMA of TR over selected period  
-6. Builds the channel:  
-   Upper Band = EMA + ATR × multiplier  
-   Lower Band = EMA - ATR × multiplier  
-7. Entry and exit logic:  
-   - Buy when price crosses above upper band  
-   - Sell when price crosses below middle line  
-8. The backtester simulates trades, applies costs, and records profits/losses  
-9. Final output shows performance over time  
 
 ---------------------------------
-TECHNICAL TERMS (SIMPLE EXPLANATION)
+TECHNICAL TERMS SIMPLIFIED
 ---------------------------------
-EMA (Exponential Moving Average) → A smooth average giving more weight to recent prices  
-ATR (Average True Range) → Measures daily price volatility or movement range  
-PnL (Profit and Loss) → How much money was made or lost in each trade  
-Slippage → Difference between expected and actual trade price  
-Basis Point (bps) → 0.01%, used to measure small fees  
-Drawdown → Largest fall from portfolio high to low  
-Sharpe Ratio → Measures return versus risk, higher is better  
-CAGR → Compound Annual Growth Rate, average yearly portfolio growth  
+• **EMA (Exponential Moving Average):** Smoothed average that reacts faster to recent prices.  
+• **ATR (Average True Range):** Measures daily volatility.  
+• **Multiplier:** Controls the channel width; higher = fewer signals.  
+• **Risk (%):** Fraction of capital risked per trade.  
+• **Stop Loss / Take Profit:** Exit conditions based on multiples of ATR.  
+• **Fee_bps / Slip_bps:** Trading costs in basis points (1bps = 0.01%).  
+• **CAGR:** Compound Annual Growth Rate, average yearly return.  
+• **Sharpe / Sortino:** Risk-adjusted performance ratios.  
+• **Max Drawdown:** Largest loss from portfolio peak to trough.  
 
 ---------------------------------
 LIMITATIONS
 ---------------------------------
-• Uses daily data only  
-• Tests one stock at a time  
-• Simple breakout rules (not optimized)  
-• Does not include dividends or split adjustments  
+• Works on daily data only (not intraday).  
+• Tests one instrument at a time.  
+• Does not include dividends or corporate actions.  
+• Strategy is basic — best used for learning, not real-money trading.  
 
 ---------------------------------
 FUTURE IMPROVEMENTS
 ---------------------------------
-• Add long-only and trend filters (like EMA200)  
-• Add trailing stops and re-entry rules  
-• Support multiple stocks and portfolios  
-• Add automatic parameter optimization  
+• Add portfolio-level backtesting  
+• Optimize parameters automatically  
+• Support multiple data sources  
+• Integrate trend filters (e.g., SMA200 confirmation)  
 
 ---------------------------------
 LICENSE
 ---------------------------------
 MIT License © 2025 Pramit  
-Free to use, modify, and distribute for learning and research purposes.  
+Free to use, modify, and share for research and educational purposes.
 
 ---------------------------------
 AUTHOR
