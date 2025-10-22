@@ -106,14 +106,6 @@ python run_backtest.py --ticker AAPL --period 5y --ema 20 --atr 10 --mult 2.0 \
   --fee_bps 1 --slip_bps 2 --outdir out 
   ```
 
----------------------------------
-SUGGESTED PARAMETERS (BITCOIN EXAMPLE) 
----------------------------------
-```bash
-python run_backtest.py --ticker BTC-USD --start 2017-01-01 --end 2025-01-01 \
-  --ema 30 --atr 20 --mult 3.0 --risk 0.015 --stop 3.0 --tp 5.0 \
-  --side long_only --execution next_close --fee_bps 10 --slip_bps 15 --warmup 60 --outdir out_btc
-  ```
 
 ---------------------------------
 OUTPUT FILES
