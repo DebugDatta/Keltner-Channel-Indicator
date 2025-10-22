@@ -34,17 +34,22 @@ project/
 INSTALLATION
 ---------------------------------
 1. Open your terminal or command prompt in the project folder.  
-2. Run the command:  
-   pip install -r requirements.txt  
+2. Run the command:
+   ```bash 
+   pip install -r requirements.txt
+   ``` 
 
 ---------------------------------
 USAGE
 ---------------------------------
 Run for Apple stock:
+```bash
 python run_backtest.py --ticker AAPL --start 2018-01-01 --end 2025-01-01  
-
+```
 Run for Indian stocks:
-python run_backtest.py --ticker RELIANCE.NS --period 5y  
+```bash
+python run_backtest.py --ticker RELIANCE.NS --period 5y
+```
 
 You can modify parameters:
 --ema       number of periods for EMA (default 20)  
