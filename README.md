@@ -18,7 +18,7 @@ WHAT THIS PROJECT DOES
 PROJECT STRUCTURE
 ---------------------------------
 project/
-│
+|
 ├─ backtester.py      → runs the backtesting engine  
 ├─ data.py            → fetches and prepares stock data  
 ├─ indicators.py      → calculates EMA, ATR, and Keltner Channels  
