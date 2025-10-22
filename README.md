@@ -147,11 +147,6 @@ FUTURE IMPROVEMENTS
 • Support multiple data sources  
 • Integrate trend filters (e.g., SMA200 confirmation)  
 
----------------------------------
-LICENSE
----------------------------------
-MIT License © 2025 Pramit  
-Free to use, modify, and share for research and educational purposes.
 
 ---------------------------------
 AUTHOR
