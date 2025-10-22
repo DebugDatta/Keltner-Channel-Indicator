@@ -101,9 +101,15 @@ The program will ask for:
 
 Option 2: Command-Line Mode  
 ```bash
-python run_backtest.py --ticker AAPL --period 5y --ema 20 --atr 10 --mult 2.0 \
-  --risk 0.01 --stop 2.0 --tp 4.0 --side long_short --execution next_open \
-  --fee_bps 1 --slip_bps 2 --outdir out 
+   python run_backtest.py `
+  --ticker RELIANCE.NS `
+  --start 2015-01-01 `
+  --end 2025-01-01 `
+  --ema 25 --atr 14 --mult 2.5 `
+  --risk 0.01 --stop 2.5 --tp 4.0 `
+  --side long_only --execution next_open `
+  --fee_bps 3 --slip_bps 5 --warmup 50 --outdir out_reliance
+
   ```
 
 
