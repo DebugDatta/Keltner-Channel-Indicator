@@ -1,157 +1,182 @@
-KELTNER CHANNEL INDICATOR PROJECT
----------------------------------
+# KELTNER CHANNEL INDICATOR PROJECT (GUI EDITION)
 
-A complete Python project that calculates, visualizes, and backtests the **Keltner Channel** — a volatility-based technical indicator used by traders to identify price trends, breakouts, and potential reversals.
+---
 
-This project uses real market data (via yfinance) to simulate trades, apply risk management, and measure performance metrics like CAGR, Sharpe Ratio, and Drawdown.  
-It is built to help students, traders, and data enthusiasts understand how volatility bands work and how to test a simple yet powerful trading system.
+A complete Python project with a **Tkinter-based GUI** that calculates, visualizes, and backtests the **Keltner Channel** — a volatility-based technical indicator used by traders to identify trends, breakouts, and reversals.
 
----------------------------------
-WHAT IS THE KELTNER CHANNEL?
----------------------------------
-The **Keltner Channel** is a type of trading envelope that adjusts itself based on market volatility.  
-It consists of three lines plotted around the price:
+This project lets you interact with sliders, dropdowns, and file choosers directly in a graphical interface — no terminal needed.
+It uses live data from Yahoo Finance, runs a backtest, displays metrics and plots in the same window, and saves all results (charts and CSVs) automatically.
 
-1. **Middle Line (EMA)** – The Exponential Moving Average (EMA) of the closing price over a specific period.  
-2. **Upper Band** – EMA + (Average True Range × Multiplier)  
+---
+
+## WHAT IS THE KELTNER CHANNEL?
+
+---
+
+The **Keltner Channel** is a volatility envelope consisting of three lines around price:
+
+1. **Middle Line (EMA)** – Exponential Moving Average of the closing price
+2. **Upper Band** – EMA + (Average True Range × Multiplier)
 3. **Lower Band** – EMA - (Average True Range × Multiplier)
 
-The **Average True Range (ATR)** measures how volatile the market is, while the **Multiplier** controls how wide the channel spreads from the EMA.
+**Interpretation:**
 
-Interpretation:
-- When prices move **above the upper band**, it suggests strong upward momentum or a potential breakout.
-- When prices move **below the lower band**, it signals strong downward momentum or a breakdown.
-- Prices oscillating inside the channel indicate a consolidating or range-bound market.
+* Price above the upper band → bullish breakout or strong momentum
+* Price below the lower band → bearish breakdown
+* Price within the bands → consolidation or low volatility phase
 
-Traders use this indicator to:
+Traders use the Keltner Channel to identify trend direction, catch breakouts early, and set stop-loss/take-profit levels that adapt to volatility.
 
-• Identify trend directions  
-• Spot breakouts and reversals  
-• Set dynamic stop losses and profit targets based on volatility  
+---
 
----------------------------------
-PROJECT OVERVIEW
----------------------------------
-This project automates:
-1. **Data Collection** – Fetches price data from Yahoo Finance.  
-2. **Indicator Calculation** – Computes EMA, ATR, and the Keltner Channel bands.  
-3. **Signal Generation** – Generates buy/sell signals when prices break out of the channel.  
-4. **Backtesting** – Simulates trades using realistic assumptions like fees, slippage, and position sizing.  
-5. **Performance Analysis** – Calculates CAGR, Sharpe, Sortino, Drawdown, and other metrics.  
-6. **Visualization** – Plots the price chart, Keltner Channel, equity curve, and drawdown graph.
+## PROJECT OVERVIEW
 
----------------------------------
-KEY FEATURES
----------------------------------
-• Supports both **stocks** and **cryptocurrencies** (e.g., AAPL, NVDA, RELIANCE.NS, BTC-USD)  
-• Interactive mode for easy parameter input  
-• Command-line mode for automation  
-• Customizable risk, stop-loss, and take-profit levels  
-• Realistic transaction fees and slippage modeling  
-• Automatically generates performance charts and CSV trade logs  
+---
 
----------------------------------
-HOW TO SET UP
----------------------------------
-1. Clone this repository: 
+The GUI app automates:
+
+1. **Data Fetching** – Pulls OHLC data from Yahoo Finance
+2. **Indicator Computation** – Calculates EMA, ATR, and Keltner Channel
+3. **Signal Generation** – Detects entry and exit points from breakouts
+4. **Backtesting** – Simulates realistic trades with risk management, slippage, and fees
+5. **Performance Metrics** – Computes CAGR, Sharpe, Sortino, Max Drawdown, Exposure, etc.
+6. **Visualization** – Shows all charts (price, equity, drawdown) inside the GUI
+7. **Export** – Saves CSVs and PNGs to a user-selected folder
+
+---
+
+## KEY FEATURES
+
+---
+
+- User-friendly **GUI built with Tkinter**
+- **Ticker input** box with real-time validation (errors shown instantly)
+- **Sliders** for EMA, ATR, multiplier, risk, stop × ATR, and take-profit × ATR
+- **Dropdowns** for side (`long_only`, `short_only`, `long_short`) and execution mode (`next_open`, `next_close`)
+- **Automatic folder chooser** to pick where to save results
+- **Live metrics panel** with CAGR, Sharpe, Sortino, Max Drawdown, Exposure, Trades count
+- **Embedded Matplotlib charts** for:
+   * Price with Keltner Bands and trade markers
+   * Equity curve
+   * Drawdown curve
+     - **CSV and PNG export** for all results
+
+---
+
+## HOW TO SET UP
+
+---
+
+1. Clone the repository:
+
    ```bash
-   git clone https://github.com/DebugDatta/Keltner-Channel-Indicator.git 
+   git clone https://github.com/DebugDatta/Keltner-Channel-Indicator.git
    ```
 
-3. Enter the folder: 
+2. Enter the folder:
+
    ```bash
-   cd Keltner-Channel-Indicator 
+   cd Keltner-Channel-Indicator
    ```
 
-4. Create a virtual environment: 
+3. Create and activate a virtual environment:
+
    ```bash
-   python -m venv venv 
+   python -m venv venv
+   venv\Scripts\activate     # Windows
+   source venv/bin/activate  # macOS/Linux
    ```
 
-5. Activate it:
-    
-   • Windows →
-   ```bash
-   venv\Scripts\activate
-   ```
-   • macOS/Linux →
-   ```bash
-   source venv/bin/activate
-   ```
+4. Install dependencies:
 
-7. Install dependencies: 
    ```bash
    pip install -r requirements.txt
    ```
 
----------------------------------
-HOW TO RUN
----------------------------------
-Option 1: Interactive Mode 
-```bash
-python run_backtest.py --interactive
-``` 
-The program will ask for: 
-```bash
-- Ticker (AAPL, BTC-USD, RELIANCE.NS, etc.)
-- Date range or period
-- EMA, ATR, Multiplier
-- Risk, Stop loss, Take profit
-- Trade side (long_only, short_only, long_short)
-- Execution mode (next_open, next_close)
-- Fees, slippage, output folder 
-```
+   *(If tkinter isn’t installed, install it)*
 
-Option 2: Command-Line Mode  
-```bash
-python run_backtest.py --ticker RELIANCE.NS --start 2015-01-01 --end 2025-01-01 --ema 25 --atr 14 --mult 2.5 --risk 0.01 --stop 2.5 --tp 4.0 --side long_only --execution next_open --fee_bps 3 --slip_bps 5 --warmup 50 --outdir out_reliance
+---
 
+## HOW TO RUN (GUI MODE)
+
+---
+
+Simply execute:
+
+   ```bash
+   python gui_app.py
+   ```
+
+A graphical window will open.
+
+Inside the GUI:
+
+1. Enter a ticker (e.g., `AAPL`, `RELIANCE.NS`, `BTC-USD`)
+2. Choose period or date range
+3. Adjust sliders for EMA, ATR, Multiplier, Risk %, Stop × ATR, and optionally Take-Profit × ATR
+4. Pick Side (`long_only`, `short_only`, `long_short`) and Execution (`next_open`, `next_close`)
+5. Click **Choose Folder** to set where results will be saved
+6. Click **Run Backtest**
+
+The app will:
+- Validate the ticker
+- Download data
+- Run the strategy
+- Display metrics and charts
+- Save:
   ```
+  <ticker>_kc.csv
+  trades_<ticker>.csv
+  <ticker>_kc.png
+  <ticker>_equity.png
+  <ticker>_drawdown.png
+  ```
+  in your selected folder.
 
 
----------------------------------
-OUTPUT FILES
----------------------------------
-All results are automatically saved in your output folder:
-```bash
-• <ticker>_kc.csv → Data with indicators and signals  
-• trades_<ticker>.csv → Detailed trade logs (entries, exits, PnL)  
-• <ticker>_kc.png → Price chart with Keltner Channel  
-• <ticker>_equity.png → Portfolio growth chart  
-• <ticker>_drawdown.png → Drawdown curve  
-```
+---
 
----------------------------------
-TECHNICAL TERMS SIMPLIFIED
----------------------------------
-• **EMA (Exponential Moving Average):** Smoothed average that reacts faster to recent prices.  
-• **ATR (Average True Range):** Measures daily volatility.  
-• **Multiplier:** Controls the channel width; higher = fewer signals.  
-• **Risk (%):** Fraction of capital risked per trade.  
-• **Stop Loss / Take Profit:** Exit conditions based on multiples of ATR.  
-• **Fee_bps / Slip_bps:** Trading costs in basis points (1bps = 0.01%).  
-• **CAGR:** Compound Annual Growth Rate, average yearly return.  
-• **Sharpe / Sortino:** Risk-adjusted performance ratios.  
-• **Max Drawdown:** Largest loss from portfolio peak to trough.  
+## TECHNICAL TERMS SIMPLIFIED
 
----------------------------------
-LIMITATIONS
----------------------------------
-• Works on daily data only (not intraday).  
-• Tests one instrument at a time.  
-• Does not include dividends or corporate actions.  
-• Strategy is basic — best used for learning, not real-money trading.  
+---
 
----------------------------------
-FUTURE IMPROVEMENTS
----------------------------------
-• Add portfolio-level backtesting  
-• Optimize parameters automatically  
-• Support multiple data sources  
-• Integrate trend filters (e.g., SMA200 confirmation)  
+- **EMA (Exponential Moving Average):** Fast-reacting average used for trend detection
+- **ATR (Average True Range):** Volatility measure showing average range of movement
+- **Multiplier:** Determines channel width; larger = fewer signals
+- **Risk (%):** Fraction of capital risked per trade
+- **Stop/TP multiples:** Dynamic exits based on ATR volatility
+- **Fee_bps / Slip_bps:** Trading cost modeling in basis points (1bps = 0.01%)
+- **CAGR:** Average annual portfolio growth
+- **Sharpe / Sortino:** Risk-adjusted returns
+- **Max Drawdown:** Largest peak-to-trough equity decline
 
+---
 
----------------------------------
-AUTHOR
----------------------------------
-Developed by Pramit Datta
+## LIMITATIONS
+
+---
+
+- Works only on daily OHLC data
+- Handles one instrument per test
+- Ignores dividends and corporate events
+- Meant for learning and research, not live trading
+
+---
+
+## FUTURE IMPROVEMENTS
+
+---
+
+- Add portfolio-level testing
+- Automated parameter optimization
+- Multi-asset comparison mode
+- Trend filters like SMA200 confirmation
+- Advanced GUI themes and dashboards
+
+---
+
+## AUTHOR
+
+---
+
+Developed by **Pramit Datta**
