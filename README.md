@@ -24,6 +24,7 @@ Interpretation:
 - Prices oscillating inside the channel indicate a consolidating or range-bound market.
 
 Traders use this indicator to:
+
 • Identify trend directions  
 • Spot breakouts and reversals  
 • Set dynamic stop losses and profit targets based on volatility  
