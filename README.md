@@ -59,7 +59,7 @@ The GUI app automates:
    * Price with Keltner Bands and trade markers
    * Equity curve
    * Drawdown curve
-     - **CSV and PNG export** for all results
+- **CSV and PNG export** for all results
 
 ---
 
