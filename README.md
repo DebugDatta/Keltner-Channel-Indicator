@@ -86,8 +86,10 @@ HOW TO SET UP
 ---------------------------------
 HOW TO RUN
 ---------------------------------
-Option 1: Interactive Mode  
-python run_backtest.py --interactive  
+Option 1: Interactive Mode 
+```bash
+python run_backtest.py --interactive
+``` 
 The program will ask for: 
 ```bash
 - Ticker (AAPL, BTC-USD, RELIANCE.NS, etc.)
