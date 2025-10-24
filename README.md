@@ -41,7 +41,7 @@ The GUI app automates:
 4. **Backtesting** – Simulates realistic trades with risk management, slippage, and fees
 5. **Performance Metrics** – Computes CAGR, Sharpe, Sortino, Max Drawdown, Exposure, etc.
 6. **Visualization** – Shows all charts (price, equity, drawdown) inside the GUI
-7. **Export** – Saves CSVs and PNGs to a user-selected folder
+7. **Export** – Saves Metrices, CSVs and PNGs of results along with input parameters to a user-selected folder
 
 ---
 
@@ -125,11 +125,21 @@ The app will:
 - Display metrics and charts
 - Save:
   ```
-  <ticker>_kc.csv
-  trades_<ticker>.csv
-  <ticker>_kc.png
-  <ticker>_equity.png
-  <ticker>_drawdown.png
+  <output_root>/                     ← the folder you select in the GUI
+  │
+  └── <ticker>/                      ← automatically created subfolder
+      ├── runs_log.csv               ← appends each new run for this ticker
+      │
+      ├── <ticker>_<timestamp>_kc.csv
+      ├── <ticker>_<timestamp>_trades.csv
+      ├── <ticker>_<timestamp>_kc.png
+      ├── <ticker>_<timestamp>_equity.png
+      ├── <ticker>_<timestamp>_drawdown.png
+      ├── <ticker>_<timestamp>_params.json
+      ├── <ticker>_<timestamp>_metrics.json
+      ├── <ticker>_<timestamp>_metrics.csv
+      └── <ticker>_<timestamp>_summary.txt
+
   ```
   in your selected folder.
 
