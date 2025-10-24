@@ -1,13 +1,12 @@
 from __future__ import annotations
 import os
+import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
-
 import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-
 from data import fetch_ohlc
 from indicators import keltner_channel
 from strategy import breakout_signals
@@ -155,12 +154,10 @@ class KCBacktestApp(tk.Tk):
         self.ax_price.set_xlabel("Date")
         self.ax_price.set_ylabel("Price")
         self.canvas_price.draw()
-
         self.ax_equity.set_title("Equity Curve")
         self.ax_equity.set_xlabel("Date")
         self.ax_equity.set_ylabel("Equity")
         self.canvas_equity.draw()
-
         self.ax_dd.set_title("Drawdown")
         self.canvas_dd.draw()
 
@@ -169,12 +166,54 @@ class KCBacktestApp(tk.Tk):
         self.ax_equity.cla()
         self.ax_dd.cla()
 
+    def _collect_inputs(self, ticker, start, end, period):
+        inputs = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "ticker": ticker,
+            "period": period,
+            "start": start,
+            "end": end,
+            "side": self.side.get(),
+            "execution": self.execution.get(),
+            "ema_len": int(self.s_EMA.get()),
+            "atr_len": int(self.s_ATR.get()),
+            "multiplier": float(self.s_Multiplier.get()),
+            "risk_per_trade": float(self.s_Risk.get()),
+            "atr_stop_mult": float(self.s_Stop_x_ATR.get()),
+            "take_profit_mult_enabled": self.tp_enable.get(),
+            "take_profit_mult": float(self.tp_scale.get()) if self.tp_enable.get() else None,
+            "fee_bps": float(self.e_fee.get()),
+            "slip_bps": float(self.e_slip.get()),
+            "warmup_override": int(self.e_warm.get()),
+        }
+        return inputs
+
+    def _save_params_and_metrics(self, outdir, base, params, metrics):
+        params_path = os.path.join(outdir, f"{base}_params.json")
+        metrics_path = os.path.join(outdir, f"{base}_metrics.json")
+        with open(params_path, "w", encoding="utf-8") as f:
+            json.dump(params, f, indent=2)
+        with open(metrics_path, "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=2)
+        met_csv = os.path.join(outdir, f"{base}_metrics.csv")
+        pd.DataFrame([metrics]).to_csv(met_csv, index=False)
+        registry_csv = os.path.join(outdir, "runs_log.csv")
+        row = {**{"base": base}, **params, **metrics}
+        df_row = pd.DataFrame([row])
+        if os.path.exists(registry_csv):
+            try:
+                old = pd.read_csv(registry_csv)
+                pd.concat([old, df_row], ignore_index=True).to_csv(registry_csv, index=False)
+            except Exception:
+                df_row.to_csv(registry_csv, index=False)
+        else:
+            df_row.to_csv(registry_csv, index=False)
+
     def run(self):
         ticker = self.e_ticker.get().strip()
         if not ticker:
             messagebox.showerror("Error", "Ticker is required")
             return
-
         period = self.period.get().strip() or None
         start = self.e_start.get().strip() or None
         end = self.e_end.get().strip() or None
@@ -188,36 +227,30 @@ class KCBacktestApp(tk.Tk):
             if not messagebox.askyesno("Confirm", "Both period and start are set. Use period and ignore dates?"):
                 return
             start, end = None, None
-
         outdir = self.outdir.get().strip()
         if not outdir:
             messagebox.showerror("Error", "Choose an output folder")
             return
         os.makedirs(outdir, exist_ok=True)
-
         try:
             df = fetch_ohlc(ticker, start=start, end=end, period=period)
         except Exception as e:
             messagebox.showerror("Ticker error", f"Failed to fetch data for {ticker}\n{e}")
             return
-
         ema_len = int(self.s_EMA.get())
         atr_len = int(self.s_ATR.get())
         mult = float(self.s_Multiplier.get())
         risk = float(self.s_Risk.get())
         stop_mult = float(self.s_Stop_x_ATR.get())
         tp = float(self.tp_scale.get()) if self.tp_enable.get() else None
-
         side = self.side.get()
         execution = self.execution.get()
         fee_bps = float(self.e_fee.get())
         slip_bps = float(self.e_slip.get())
         warm = int(self.e_warm.get())
         warmup = warm if warm > 0 else max(ema_len, atr_len)
-
         kc = keltner_channel(df, ema_len=ema_len, atr_len=atr_len, mult=mult)
         sig = breakout_signals(kc)
-
         bt = BTParams(
             execution=execution,
             initial_capital=100000.0,
@@ -231,16 +264,15 @@ class KCBacktestApp(tk.Tk):
             max_leverage=1.0,
         )
         res = run_backtest(kc, sig, bt)
-
-        base = ticker
+        base = f"{ticker}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         kc_out = kc.copy()
         kc_out[["long_entry","short_entry","long_exit","short_exit"]] = sig
         kc_csv = os.path.join(outdir, f"{base}_kc.csv")
-        trades_csv = os.path.join(outdir, f"trades_{base}.csv")
+        trades_csv = os.path.join(outdir, f"{base}_trades.csv")
         kc_out.to_csv(kc_csv)
         res["trades"].to_csv(trades_csv, index=False)
-
         met = res["metrics"]
+        metrics_clean = {k: (float(v) if hasattr(v, "__float__") else v) for k, v in met.items()}
         txt = (
             f"CAGR {met['CAGR']:.2%}  |  Sharpe {met['Sharpe']:.2f}  |  "
             f"Sortino {met['Sortino']:.2f}  |  MaxDD {met['MaxDrawdown']:.2%}  |  "
@@ -249,14 +281,11 @@ class KCBacktestApp(tk.Tk):
         )
         self.metrics_text.delete("1.0", "end")
         self.metrics_text.insert("end", txt)
-
         self._clear_plots()
-
         self.ax_price.plot(kc.index, kc["Close"], label="Close")
         self.ax_price.plot(kc.index, kc["KC_Middle"], label="KC Middle")
         self.ax_price.plot(kc.index, kc["KC_Upper"], label="KC Upper")
         self.ax_price.plot(kc.index, kc["KC_Lower"], label="KC Lower")
-
         tdf = res["trades"]
         if not tdf.empty:
             longs = tdf[tdf["side"]=="long"]
@@ -270,7 +299,6 @@ class KCBacktestApp(tk.Tk):
         self.ax_price.set_xlabel("Date")
         self.ax_price.set_ylabel("Price")
         self.canvas_price.draw()
-
         curve = res["equity"]
         self.ax_equity.plot(curve.index, curve.values, label="Equity")
         self.ax_equity.set_title(f"Equity Curve, {ticker}")
@@ -278,19 +306,28 @@ class KCBacktestApp(tk.Tk):
         self.ax_equity.set_ylabel("Equity")
         self.ax_equity.legend(loc="best")
         self.canvas_equity.draw()
-
         dd = curve / curve.cummax() - 1.0
         self.ax_dd.fill_between(dd.index, dd.values, 0, step="pre")
         self.ax_dd.set_title(f"Drawdown, {ticker}")
         self.canvas_dd.draw()
-
         price_png = os.path.join(outdir, f"{base}_kc.png")
         equity_png = os.path.join(outdir, f"{base}_equity.png")
         dd_png = os.path.join(outdir, f"{base}_drawdown.png")
         self.fig_price.savefig(price_png, dpi=150, bbox_inches="tight")
         self.fig_equity.savefig(equity_png, dpi=150, bbox_inches="tight")
         self.fig_dd.savefig(dd_png, dpi=150, bbox_inches="tight")
-
+        params = self._collect_inputs(ticker, start, end, period)
+        self._save_params_and_metrics(outdir, base, params, metrics_clean)
+        summary_txt = os.path.join(outdir, f"{base}_summary.txt")
+        with open(summary_txt, "w", encoding="utf-8") as f:
+            f.write(f"Run: {base}\n")
+            f.write(f"Timestamp: {params['timestamp']}\n")
+            f.write("Parameters:\n")
+            for k, v in params.items():
+                f.write(f"  {k}: {v}\n")
+            f.write("\nMetrics:\n")
+            for k, v in metrics_clean.items():
+                f.write(f"  {k}: {v}\n")
         messagebox.showinfo("Done", f"Backtest complete.\nFiles saved in:\n{outdir}")
 
     @staticmethod
