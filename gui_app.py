@@ -1,6 +1,3 @@
-Here’s your updated file, no extra changes beyond light and dark modes, PDF export with inputs metrics and graphs, and per ticker subfolder creation.
-
-```python
 from __future__ import annotations
 import os
 import json
@@ -517,4 +514,3 @@ class KCBacktestApp(tk.Tk):
 if __name__ == "__main__":
     app = KCBacktestApp()
     app.mainloop()
-```
