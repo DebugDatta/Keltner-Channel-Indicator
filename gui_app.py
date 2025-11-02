@@ -19,52 +19,54 @@ class KCBacktestApp(tk.Tk):
         self.title("Keltner Channel Backtester")
         self.geometry("1200x800")
         self.outdir = tk.StringVar(value="")
-        self.theme = tk.StringVar(value="light")
         self._build_ui()
         self._init_plots()
-        self._init_theme_engine()
-        self._apply_theme()
         self._last_run_info = None  # {'run_dir': str, 'base': str}
 
     def _build_ui(self):
         root = ttk.Frame(self)
         root.pack(fill="both", expand=True, padx=8, pady=8)
+        root.columnconfigure(0, weight=1)
 
         ctrl = ttk.LabelFrame(root, text="Inputs")
-        ctrl.pack(side="top", fill="x")
+        ctrl.grid(row=0, column=0, sticky="nsew")
+        for c in range(12):
+            ctrl.columnconfigure(c, weight=1, uniform="cols")
 
         r = 0
+        # row 0, compact top line
         ttk.Label(ctrl, text="Ticker").grid(row=r, column=0, sticky="w", padx=4, pady=4)
-        self.e_ticker = ttk.Entry(ctrl, width=12)
+        self.e_ticker = ttk.Entry(ctrl, width=10)
         self.e_ticker.insert(0, "AAPL")
-        self.e_ticker.grid(row=r, column=1, sticky="w", padx=4, pady=4)
+        self.e_ticker.grid(row=r, column=1, sticky="we", padx=4, pady=4)
 
         ttk.Label(ctrl, text="Period").grid(row=r, column=2, sticky="w", padx=4)
         self.period = tk.StringVar(value="5y")
         period_choices = ["1mo","3mo","6mo","1y","2y","5y","10y","max"]
         self.dd_period = ttk.Combobox(ctrl, textvariable=self.period, values=period_choices, width=7, state="readonly")
-        self.dd_period.grid(row=r, column=3, sticky="w", padx=4, pady=4)
+        self.dd_period.grid(row=r, column=3, sticky="we", padx=4, pady=4)
 
         ttk.Label(ctrl, text="Start").grid(row=r, column=4, sticky="w", padx=4)
         self.e_start = ttk.Entry(ctrl, width=12)
         self.e_start.insert(0, "")
-        self.e_start.grid(row=r, column=5, sticky="w", padx=4)
+        self.e_start.grid(row=r, column=5, sticky="we", padx=4)
 
         ttk.Label(ctrl, text="End").grid(row=r, column=6, sticky="w", padx=4)
         self.e_end = ttk.Entry(ctrl, width=12)
         self.e_end.insert(0, "")
-        self.e_end.grid(row=r, column=7, sticky="w", padx=4)
+        self.e_end.grid(row=r, column=7, sticky="we", padx=4)
 
         ttk.Label(ctrl, text="Side").grid(row=r, column=8, sticky="w", padx=4)
         self.side = tk.StringVar(value="long_short")
         self.dd_side = ttk.Combobox(ctrl, textvariable=self.side, values=["long_only","short_only","long_short"], width=12, state="readonly")
-        self.dd_side.grid(row=r, column=9, sticky="w", padx=4, pady=4)
+        self.dd_side.grid(row=r, column=9, sticky="we", padx=4, pady=4)
 
         ttk.Label(ctrl, text="Execution").grid(row=r, column=10, sticky="w", padx=4)
         self.execution = tk.StringVar(value="next_open")
         self.dd_exec = ttk.Combobox(ctrl, textvariable=self.execution, values=["next_open","next_close"], width=10, state="readonly")
-        self.dd_exec.grid(row=r, column=11, sticky="w", padx=4, pady=4)
+        self.dd_exec.grid(row=r, column=11, sticky="we", padx=4, pady=4)
 
+        # row 1, sliders in compact cells, label above, value at right
         r += 1
         self._slider(ctrl, r, 0, "EMA", 20, 5, 200, 1)
         self._slider(ctrl, r, 2, "ATR", 10, 5, 100, 1)
@@ -78,53 +80,57 @@ class KCBacktestApp(tk.Tk):
         self.cb_tp.grid(row=r, column=11, sticky="w")
         r += 1
 
+        # row 2, TP scale spanning 4 columns when enabled
         self.tp_row = r
         self.tp_frame = ttk.Frame(ctrl)
-        self.tp_frame.grid(row=r, column=0, columnspan=12, sticky="w")
-        self.tp_scale = tk.Scale(self.tp_frame, from_=0.5, to=10.0, resolution=0.1, orient="horizontal", length=200)
-        ttk.Label(self.tp_frame, text="Take Profit x ATR").pack(side="left", padx=4)
+        self.tp_frame.grid(row=r, column=0, columnspan=12, sticky="we", padx=4)
+        self.tp_frame.columnconfigure(1, weight=1)
+        ttk.Label(self.tp_frame, text="Take Profit x ATR").grid(row=0, column=0, sticky="w")
+        self.tp_scale = ttk.Scale(self.tp_frame, from_=0.5, to=10.0, orient="horizontal")
         self.tp_scale.set(4.0)
-        self.tp_scale.pack(side="left", padx=4)
+        self.tp_scale.grid(row=0, column=1, sticky="we", padx=6)
         self._toggle_tp()
         r += 1
 
+        # row 3, fees warmup and folder
         ttk.Label(ctrl, text="Fee bps").grid(row=r, column=0, sticky="w", padx=4, pady=4)
         self.e_fee = ttk.Entry(ctrl, width=8)
         self.e_fee.insert(0, "1.0")
-        self.e_fee.grid(row=r, column=1, sticky="w")
+        self.e_fee.grid(row=r, column=1, sticky="we", padx=4)
 
         ttk.Label(ctrl, text="Slip bps").grid(row=r, column=2, sticky="w", padx=4, pady=4)
         self.e_slip = ttk.Entry(ctrl, width=8)
         self.e_slip.insert(0, "2.0")
-        self.e_slip.grid(row=r, column=3, sticky="w")
+        self.e_slip.grid(row=r, column=3, sticky="we", padx=4)
 
         ttk.Label(ctrl, text="Warmup").grid(row=r, column=4, sticky="w", padx=4, pady=4)
         self.e_warm = ttk.Entry(ctrl, width=8)
         self.e_warm.insert(0, "0")
-        self.e_warm.grid(row=r, column=5, sticky="w")
+        self.e_warm.grid(row=r, column=5, sticky="we", padx=4)
 
         ttk.Label(ctrl, text="Save to").grid(row=r, column=6, sticky="w", padx=4, pady=4)
-        self.e_outdir = ttk.Entry(ctrl, textvariable=self.outdir, width=30)
+        self.e_outdir = ttk.Entry(ctrl, textvariable=self.outdir)
         self.e_outdir.grid(row=r, column=7, columnspan=3, sticky="we", padx=4)
 
-        # Theme control and buttons
-        ttk.Label(ctrl, text="Theme").grid(row=r, column=10, sticky="w", padx=4)
-        self.dd_theme = ttk.Combobox(ctrl, textvariable=self.theme, values=["light","dark"], width=8, state="readonly")
-        self.dd_theme.grid(row=r, column=11, sticky="w", padx=4)
-        self.dd_theme.bind("<<ComboboxSelected>>", lambda e: self._apply_theme())
+        ttk.Button(ctrl, text="Choose Folder", command=self.choose_outdir).grid(row=r, column=10, sticky="we", padx=4)
+        ttk.Button(ctrl, text="Run Backtest", command=self.run).grid(row=r, column=11, sticky="we", padx=4)
 
         r += 1
-        ttk.Button(ctrl, text="Choose Folder", command=self.choose_outdir).grid(row=r, column=6, sticky="w", padx=4)
-        ttk.Button(ctrl, text="Run Backtest", command=self.run).grid(row=r, column=7, sticky="we", padx=4)
-        ttk.Button(ctrl, text="Export PDF", command=self.export_pdf).grid(row=r, column=8, sticky="we", padx=4)
+        # row 4, export
+        ttk.Button(ctrl, text="Export PDF", command=self.export_pdf).grid(row=r, column=10, columnspan=2, sticky="we", padx=4, pady=(0,6))
 
+        # metrics
         self.metrics_box = ttk.LabelFrame(root, text="Metrics")
-        self.metrics_box.pack(side="top", fill="x", pady=(8, 8))
+        self.metrics_box.grid(row=1, column=0, sticky="we", pady=(8, 8))
+        self.metrics_box.columnconfigure(0, weight=1)
         self.metrics_text = tk.Text(self.metrics_box, height=4)
-        self.metrics_text.pack(fill="x")
+        self.metrics_text.grid(row=0, column=0, sticky="we")
 
+        # plots
         self.plot_box = ttk.Notebook(root)
-        self.plot_box.pack(fill="both", expand=True)
+        self.plot_box.grid(row=2, column=0, sticky="nsew")
+        root.rowconfigure(2, weight=1)
+
         self.fig_price = Figure(figsize=(6,3))
         self.ax_price = self.fig_price.add_subplot(111)
         self.canvas_price = FigureCanvasTkAgg(self.fig_price, master=self.plot_box)
@@ -145,10 +151,36 @@ class KCBacktestApp(tk.Tk):
         self.plot_box.add(self.canvas_dd_widget, text="Drawdown")
 
     def _slider(self, parent, row, col, label, default, lo, hi, res):
-        ttk.Label(parent, text=label).grid(row=row, column=col, sticky="w", padx=4)
-        scale = tk.Scale(parent, from_=lo, to=hi, resolution=res, orient="horizontal", length=200)
+        # compact slider cell: label on top, value at right, slider below spanning two columns
+        cell = ttk.Frame(parent)
+        cell.grid(row=row, column=col, columnspan=2, sticky="we", padx=4, pady=2)
+        cell.columnconfigure(0, weight=1)
+        cell.columnconfigure(1, weight=0)
+
+        lbl = ttk.Label(cell, text=label)
+        lbl.grid(row=0, column=0, sticky="w")
+
+        val = tk.StringVar(value=str(default))
+        val_lbl = ttk.Label(cell, textvariable=val)
+        val_lbl.grid(row=0, column=1, sticky="e")
+
+        scale = ttk.Scale(cell, from_=lo, to=hi, orient="horizontal")
         scale.set(default)
-        scale.grid(row=row, column=col+1, sticky="w", padx=4)
+        scale.grid(row=1, column=0, columnspan=2, sticky="we")
+
+        # snap to resolution on release and update value label
+        def _update_value(_evt=None):
+            v = float(scale.get())
+            # round to resolution
+            steps = round((v - lo) / res)
+            snapped = lo + steps * res
+            scale.set(snapped)
+            if res.is_integer() if isinstance(res, float) else True:
+                val.set(f"{snapped:.0f}" if float(res).is_integer() else f"{snapped:.3f}")
+            else:
+                val.set(f"{snapped:.3f}")
+
+        scale.bind("<ButtonRelease-1>", _update_value)
         setattr(self, f"s_{label.replace(' ','_')}", scale)
 
     def _toggle_tp(self):
@@ -189,8 +221,8 @@ class KCBacktestApp(tk.Tk):
             "end": end,
             "side": self.side.get(),
             "execution": self.execution.get(),
-            "ema_len": int(self.s_EMA.get()),
-            "atr_len": int(self.s_ATR.get()),
+            "ema_len": int(float(self.s_EMA.get())),
+            "atr_len": int(float(self.s_ATR.get())),
             "multiplier": float(self.s_Multiplier.get()),
             "risk_per_trade": float(self.s_Risk.get()),
             "atr_stop_mult": float(self.s_Stop_x_ATR.get()),
@@ -211,7 +243,6 @@ class KCBacktestApp(tk.Tk):
             json.dump(metrics, f, indent=2)
         met_csv = os.path.join(outdir, f"{base}_metrics.csv")
         pd.DataFrame([metrics]).to_csv(met_csv, index=False)
-        # keep registry at root chosen folder for overview of all runs
         registry_csv = os.path.join(os.path.dirname(outdir), "runs_log.csv") if os.path.basename(outdir) else os.path.join(outdir, "runs_log.csv")
         row = {**{"base": base}, **params, **metrics}
         df_row = pd.DataFrame([row])
@@ -247,7 +278,6 @@ class KCBacktestApp(tk.Tk):
             messagebox.showerror("Error", "Choose an output folder")
             return
 
-        # per ticker subfolder
         run_dir = os.path.join(root_outdir, ticker)
         os.makedirs(run_dir, exist_ok=True)
 
@@ -256,8 +286,8 @@ class KCBacktestApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Ticker error", f"Failed to fetch data for {ticker}\n{e}")
             return
-        ema_len = int(self.s_EMA.get())
-        atr_len = int(self.s_ATR.get())
+        ema_len = int(float(self.s_EMA.get()))
+        atr_len = int(float(self.s_ATR.get()))
         mult = float(self.s_Multiplier.get())
         risk = float(self.s_Risk.get())
         stop_mult = float(self.s_Stop_x_ATR.get())
@@ -268,6 +298,7 @@ class KCBacktestApp(tk.Tk):
         slip_bps = float(self.e_slip.get())
         warm = int(self.e_warm.get())
         warmup = warm if warm > 0 else max(ema_len, atr_len)
+
         kc = keltner_channel(df, ema_len=ema_len, atr_len=atr_len, mult=mult)
         sig = breakout_signals(kc)
         bt = BTParams(
@@ -300,9 +331,8 @@ class KCBacktestApp(tk.Tk):
         )
         self.metrics_text.delete("1.0", "end")
         self.metrics_text.insert("end", txt)
-        self._clear_plots()
-        self._apply_mpl_colors()  # ensure plots follow current theme
 
+        self._clear_plots()
         self.ax_price.plot(kc.index, kc["Close"], label="Close")
         self.ax_price.plot(kc.index, kc["KC_Middle"], label="KC Middle")
         self.ax_price.plot(kc.index, kc["KC_Upper"], label="KC Upper")
@@ -354,7 +384,6 @@ class KCBacktestApp(tk.Tk):
             for k, v in metrics_clean.items():
                 f.write(f"  {k}: {v}\n")
 
-        # remember last run
         self._last_run_info = {"run_dir": run_dir, "base": base, "params": params, "metrics": metrics_clean}
         messagebox.showinfo("Done", f"Backtest complete.\nFiles saved in:\n{run_dir}")
 
@@ -368,8 +397,7 @@ class KCBacktestApp(tk.Tk):
         metrics = self._last_run_info["metrics"]
         pdf_path = os.path.join(run_dir, f"{base}_report.pdf")
 
-        # first page with inputs and metrics as text
-        page = Figure(figsize=(8.27, 11.69))  # A4 portrait in inches
+        page = Figure(figsize=(8.27, 11.69))  # A4
         ax = page.add_subplot(111)
         ax.axis("off")
 
@@ -386,16 +414,10 @@ class KCBacktestApp(tk.Tk):
         page.text(0.05, 0.95, "Keltner Channel Backtest Report", fontsize=16, va="top", ha="left", weight="bold")
         page.text(0.05, 0.90, txt, fontsize=9, va="top", ha="left", family="monospace")
 
-        # save multipage pdf
         with PdfPages(pdf_path) as pp:
-            # ensure mpl colors match current theme for the text page too
-            self._set_fig_facecolors(page)
             pp.savefig(page, bbox_inches="tight")
-            self._set_fig_facecolors(self.fig_price)
             pp.savefig(self.fig_price, bbox_inches="tight")
-            self._set_fig_facecolors(self.fig_equity)
             pp.savefig(self.fig_equity, bbox_inches="tight")
-            self._set_fig_facecolors(self.fig_dd)
             pp.savefig(self.fig_dd, bbox_inches="tight")
 
         messagebox.showinfo("PDF Exported", f"Report saved to:\n{pdf_path}")
@@ -407,109 +429,6 @@ class KCBacktestApp(tk.Tk):
             return True
         except Exception:
             return False
-
-    # Theme support
-    def _init_theme_engine(self):
-        self._colors = {
-            "light": {
-                "bg": "#F5F5F5",
-                "fg": "#000000",
-                "input_bg": "#FFFFFF",
-                "input_fg": "#000000",
-                "frame_bg": "#F5F5F5",
-                "accent": "#1a73e8",
-                "plot_bg": "#FFFFFF",
-                "axes_fg": "#000000",
-                "grid": "#E0E0E0",
-                "text_bg": "#FFFFFF",
-                "text_fg": "#000000",
-                "tab_bg": "#EDEDED",
-                "tab_fg": "#000000",
-            },
-            "dark": {
-                "bg": "#202124",
-                "fg": "#E8EAED",
-                "input_bg": "#2B2C2F",
-                "input_fg": "#E8EAED",
-                "frame_bg": "#202124",
-                "accent": "#8AB4F8",
-                "plot_bg": "#121212",
-                "axes_fg": "#E8EAED",
-                "grid": "#3C4043",
-                "text_bg": "#2B2C2F",
-                "text_fg": "#E8EAED",
-                "tab_bg": "#303134",
-                "tab_fg": "#E8EAED",
-            },
-        }
-        self.style = ttk.Style()
-        try:
-            self.style.theme_use("clam")
-        except Exception:
-            pass
-
-    def _apply_theme(self):
-        t = self.theme.get()
-        c = self._colors[t]
-
-        # root
-        self.configure(bg=c["bg"])
-        for w in self.winfo_children():
-            try:
-                w.configure(style="TFrame")
-            except Exception:
-                pass
-
-        # ttk styles
-        self.style.configure("TFrame", background=c["frame_bg"])
-        self.style.configure("TLabelframe", background=c["frame_bg"], foreground=c["fg"])
-        self.style.configure("TLabelframe.Label", background=c["frame_bg"], foreground=c["fg"])
-        self.style.configure("TLabel", background=c["frame_bg"], foreground=c["fg"])
-        self.style.configure("TButton", foreground=c["fg"])
-        self.style.configure("TCombobox", fieldbackground=c["input_bg"], foreground=c["input_fg"], background=c["input_bg"])
-        self.style.map("TButton", foreground=[("active", c["fg"])])
-        self.style.configure("TNotebook", background=c["tab_bg"])
-        self.style.configure("TNotebook.Tab", background=c["tab_bg"], foreground=c["tab_fg"])
-
-        # tk widgets
-        self.metrics_text.configure(bg=c["text_bg"], fg=c["text_fg"], insertbackground=c["text_fg"])
-
-        # entries that are tk.Entry within ttk.Entry are fine, no extra set
-
-        # matplotlib figures
-        self._apply_mpl_colors()
-
-        # redraw canvases
-        self.canvas_price.draw()
-        self.canvas_equity.draw()
-        self.canvas_dd.draw()
-
-    def _set_fig_facecolors(self, fig: Figure):
-        c = self._colors[self.theme.get()]
-        fig.set_facecolor(c["frame_bg"])
-        for ax in fig.axes:
-            ax.set_facecolor(c["plot_bg"])
-            ax.tick_params(colors=c["axes_fg"])
-            for spine in ax.spines.values():
-                spine.set_color(c["axes_fg"])
-            grid_color = c["grid"]
-            ax.grid(True, color=grid_color, alpha=0.4)
-
-            # update text colors
-            if ax.title:
-                ax.title.set_color(c["axes_fg"])
-            ax.xaxis.label.set_color(c["axes_fg"])
-            ax.yaxis.label.set_color(c["axes_fg"])
-            leg = ax.get_legend()
-            if leg:
-                for text in leg.get_texts():
-                    text.set_color(c["axes_fg"])
-
-    def _apply_mpl_colors(self):
-        # apply to existing figs
-        self._set_fig_facecolors(self.fig_price)
-        self._set_fig_facecolors(self.fig_equity)
-        self._set_fig_facecolors(self.fig_dd)
 
 if __name__ == "__main__":
     app = KCBacktestApp()
