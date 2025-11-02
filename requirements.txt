@@ -6,3 +6,4 @@ tk
 ttkbootstrap
 requests
 streamlit>=1.35
+plotly>=5.22

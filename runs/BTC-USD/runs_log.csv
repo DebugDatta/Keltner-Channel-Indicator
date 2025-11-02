@@ -1,0 +1,4 @@
+base,timestamp,ticker,period,start,end,side,execution,ema_len,atr_len,multiplier,risk_per_trade,atr_stop_mult,take_profit_mult_enabled,take_profit_mult,fee_bps,slip_bps,warmup_override,CAGR,Sharpe,Sortino,MaxDrawdown,Exposure,NumTrades
+BTC-USD_20251102_235955,2025-11-02T23:59:56,BTC-USD,5y,,,long_short,next_open,20,10,2.0,0.01,2.0,False,,1.0,2.0,20,0.0,0.0,,0.0,0.0,0.0
+BTC-USD_20251103_000451,2025-11-03T00:04:52,BTC-USD,5y,,,long_short,next_open,20,10,2.0,0.01,2.0,False,,1.0,2.0,20,0.0,0.0,,0.0,0.0,0.0
+BTC-USD_20251103_000453,2025-11-03T00:04:54,BTC-USD,5y,,,long_short,next_open,20,10,2.0,0.01,2.0,False,,1.0,2.0,20,0.0,0.0,,0.0,0.0,0.0

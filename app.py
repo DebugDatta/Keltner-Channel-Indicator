@@ -1,5 +1,5 @@
 from __future__ import annotations
-import os, io, json, shutil, tempfile
+import os, io, json, tempfile, shutil
 from datetime import datetime
 import pandas as pd
 import numpy as np
@@ -14,7 +14,7 @@ from indicators import keltner_channel
 from strategy import breakout_signals
 from backtester import run_backtest, BTParams
 
-# ---------------- base setup ----------------
+# ---------------- setup ----------------
 st.set_page_config(page_title="Keltner Backtester", layout="wide")
 
 def make_dirs(root: str, ticker: str):
@@ -27,6 +27,20 @@ def make_dirs(root: str, ticker: str):
 def dd_series(equity: pd.Series):
     return equity / equity.cummax() - 1.0
 
+# safe csv reader
+def safe_read_csv(path: str, parse_date_cols: tuple[str, ...] = ()) -> pd.DataFrame | None:
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return None
+    try:
+        df = pd.read_csv(path)
+    except pd.errors.EmptyDataError:
+        return None
+    for c in parse_date_cols:
+        if c in df.columns:
+            df[c] = pd.to_datetime(df[c], errors="coerce")
+    return df
+
+# mpl figs
 def mpl_price(kc: pd.DataFrame, trades: pd.DataFrame, ticker: str) -> Figure:
     fig = Figure(figsize=(8,3)); ax = fig.add_subplot(111)
     ax.plot(kc.index, kc["Close"], label="Close")
@@ -53,6 +67,7 @@ def mpl_drawdown(eq: pd.Series, ticker: str) -> Figure:
     ax.fill_between(dd.index, dd.values, 0, step="pre"); ax.set_title(f"Drawdown, {ticker}")
     ax.grid(True, alpha=0.3); fig.tight_layout(); return fig
 
+# plotly figs
 def plotly_price_ohlc(kc: pd.DataFrame, trades: pd.DataFrame, ticker: str) -> go.Figure:
     df = kc.reset_index().rename(columns={"index":"Date"})
     fig = go.Figure([go.Candlestick(x=df["Date"], open=df["Open"], high=df["High"],
@@ -83,6 +98,7 @@ def plotly_dd(eq: pd.Series) -> go.Figure:
     fig = go.Figure(); fig.add_trace(go.Scatter(x=dd["Date"], y=dd["Drawdown"], fill="tozeroy", name="Drawdown"))
     fig.update_layout(title="Drawdown", height=320); return fig
 
+# pdf
 def build_pdf(params: dict, metrics: dict, fig_price: Figure, fig_equity: Figure, fig_dd: Figure,
               include_text=True, include_price=True, include_equity=True, include_dd=True) -> bytes:
     buf = io.BytesIO()
@@ -102,28 +118,53 @@ def build_pdf(params: dict, metrics: dict, fig_price: Figure, fig_equity: Figure
         if include_dd:     pp.savefig(fig_dd,     bbox_inches="tight")
     buf.seek(0); return buf.read()
 
+# aggregate logs from subfolders
 @st.cache_data
-def read_runs_log(root_outdir: str) -> pd.DataFrame:
-    path = os.path.join(root_outdir, "runs_log.csv")
-    if not os.path.exists(path): return pd.DataFrame()
-    df = pd.read_csv(path)
-    for col in ["timestamp","Timestamp"]:
-        if col in df.columns:
-            with pd.option_context("mode.chained_assignment", None):
-                df[col] = pd.to_datetime(df[col], errors="coerce")
-    return df
+def read_all_runs_logs(root_outdir: str) -> pd.DataFrame:
+    if not os.path.isdir(root_outdir):
+        return pd.DataFrame()
+    frames = []
+    for name in sorted(os.listdir(root_outdir)):
+        p = os.path.join(root_outdir, name)
+        f = os.path.join(p, "runs_log.csv")
+        if os.path.isdir(p) and os.path.exists(f) and os.path.getsize(f) > 0:
+            df = safe_read_csv(f)
+            if df is not None:
+                df["ticker_folder"] = name
+                frames.append(df)
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
-# ---- LOCAL WINDOWS FOLDER PICKER (works only when running locally) ----
-def browse_for_folder_local() -> str | None:
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-        root = tk.Tk(); root.withdraw()
-        path = filedialog.askdirectory(title="Select output root folder")
-        root.destroy()
-        return path if path else None
-    except Exception:
-        return None
+# ---------------- compact value box styling (single box only) ----------------
+st.markdown("""
+<style>
+.kc-box {border:1px solid var(--secondary-background-color);
+         border-radius:0.5rem;padding:0.35rem 0.6rem;margin:0.3rem 0;}
+</style>
+""", unsafe_allow_html=True)
+
+# single-box dual control: slider + one number_input
+def dual(label, lo, hi, default, step, fmt, *, is_int=False):
+    key = label.replace(" ", "_")
+    if f"{key}_val" not in st.session_state:
+        st.session_state[f"{key}_val"] = default
+    v = st.session_state[f"{key}_val"]
+
+    # slider
+    v = st.slider(label, lo, hi, v, step=step, key=f"{key}_slider")
+
+    # one compact box with the numeric input only
+    with st.container():
+        st.markdown('<div class="kc-box">', unsafe_allow_html=True)
+        v = st.number_input(label + " ", lo, hi, v, step=step, format=fmt,
+                            key=f"{key}_input", label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # clamp and cast
+    v = max(lo, min(hi, v))
+    if is_int:
+        v = int(round(v))
+    st.session_state[f"{key}_val"] = v
+    return v
 
 # ---------------- sidebar ----------------
 with st.sidebar:
@@ -138,13 +179,8 @@ with st.sidebar:
     execution = st.selectbox("Execution", ["next_open","next_close"], index=0)
 
     st.markdown("**Parameters**")
-    def dual(label, lo, hi, default, step, fmt):
-        c3, c4 = st.columns([3,1])
-        with c3: v = st.slider(label, lo, hi, default, step)
-        with c4: v = st.number_input(label+" ", lo, hi, v, step=step, format=fmt)
-        return v
-    ema_len   = dual("EMA", 5, 200, 20, 1, "%d")
-    atr_len   = dual("ATR", 5, 100, 10, 1, "%d")
+    ema_len   = dual("EMA", 5, 200, 20, 1, "%d", is_int=True)
+    atr_len   = dual("ATR", 5, 100, 10, 1, "%d", is_int=True)
     mult      = dual("Multiplier", 1.0, 5.0, 2.0, 0.1, "%.1f")
     risk      = dual("Risk per trade", 0.001, 0.100, 0.010, 0.001, "%.3f")
     stop_mult = dual("Stop x ATR", 0.5, 10.0, 2.0, 0.1, "%.1f")
@@ -152,18 +188,7 @@ with st.sidebar:
     tp_mult   = dual("Take Profit x ATR", 0.5, 10.0, 4.0, 0.1, "%.1f") if tp_enable else None
 
     st.markdown("**Save location**")
-    if "root_outdir" not in st.session_state:
-        st.session_state.root_outdir = "runs"
-    st.text_input("Save root folder", key="root_outdir")
-
-    col_b = st.columns(2)
-    with col_b[0]:
-        if st.button("Browse… (local only)"):
-            chosen = browse_for_folder_local()
-            if chosen:
-                st.session_state.root_outdir = chosen
-    with col_b[1]:
-        st.caption("Opens Windows folder picker when running locally. Remote deploys cannot open Explorer.")
+    root_outdir = st.text_input("Save root folder", "runs")
 
     st.markdown("**Costs & Run**")
     fee_bps = st.number_input("Fee bps", 0.0, 50.0, 1.0, 0.1)
@@ -172,7 +197,6 @@ with st.sidebar:
 
     run_btn = st.button("Run Backtest", use_container_width=True)
 
-# ---------------- warnings ----------------
 if period and (start or end):
     st.info("Period selected, start and end will be ignored.")
 
@@ -181,7 +205,7 @@ if "last" not in state: state["last"] = None
 
 # ---------------- run backtest ----------------
 if run_btn:
-    root_outdir = st.session_state.root_outdir.strip() or "runs"
+    root_outdir = root_outdir.strip() or "runs"
     if not ticker:
         st.error("Ticker required"); st.stop()
 
@@ -216,20 +240,26 @@ if run_btn:
         "side": side, "execution": execution, "ema_len": int(ema_len), "atr_len": int(atr_len),
         "multiplier": float(mult), "risk_per_trade": float(risk), "atr_stop_mult": float(stop_mult),
         "take_profit_mult_enabled": tp_enable, "take_profit_mult": float(tp_mult) if tp_enable else None,
-        "fee_bps": float(fee_bps), "slip_bps": float(slip_bps), "warmup_override": int(warm_override),
+        "fee_bps": float(fee_bps), "slip_bps": float(slip_bps), "warmup_override": int(warmup),
     }
     with open(os.path.join(run_dir, f"{base}_params.json"), "w", encoding="utf-8") as f: json.dump(params, f, indent=2)
     metrics_clean = {k: float(v) if hasattr(v, "__float__") else v for k, v in metrics.items()}
     with open(os.path.join(run_dir, f"{base}_metrics.json"), "w", encoding="utf-8") as f: json.dump(metrics_clean, f, indent=2)
     pd.DataFrame([metrics_clean]).to_csv(os.path.join(run_dir, f"{base}_metrics.csv"), index=False)
 
-    registry_csv = os.path.join(root_outdir, "runs_log.csv")
+    # runs_log.csv inside ticker subfolder
+    registry_csv = os.path.join(run_dir, "runs_log.csv")
     row = {**{"base": base}, **params, **metrics_clean}
     df_row = pd.DataFrame([row])
     if os.path.exists(registry_csv):
-        try: pd.concat([pd.read_csv(registry_csv), df_row], ignore_index=True).to_csv(registry_csv, index=False)
-        except Exception: df_row.to_csv(registry_csv, index=False)
-    else: df_row.to_csv(registry_csv, index=False)
+        try:
+            old = safe_read_csv(registry_csv)
+            if old is None: df_row.to_csv(registry_csv, index=False)
+            else: pd.concat([old, df_row], ignore_index=True).to_csv(registry_csv, index=False)
+        except Exception:
+            df_row.to_csv(registry_csv, index=False)
+    else:
+        df_row.to_csv(registry_csv, index=False)
 
     f_price = mpl_price(kc, trades, ticker); f_eq = mpl_equity(equity, ticker); f_dd = mpl_drawdown(equity, ticker)
     state["last"] = {"run_dir": run_dir, "base": base, "kc": kc, "trades": trades, "equity": equity,
@@ -237,7 +267,7 @@ if run_btn:
     st.success(f"Saved in: {run_dir}")
 
 # ---------------- tabs ----------------
-tabs = st.tabs(["Backtest", "Trades Explorer", "Run History", "Report Builder"])
+tabs = st.tabs(["Backtest", "KC CSV", "Trades Explorer", "Run History", "Report Builder"])
 
 with tabs[0]:
     if state["last"] is None:
@@ -255,59 +285,71 @@ with tabs[0]:
         with c2:
             st.plotly_chart(plotly_dd(equity), use_container_width=True)
 
-        # downloads
         run_dir = last["run_dir"]; base = last["base"]
         kc_csv = os.path.join(run_dir, f"{base}_kc.csv")
         trades_csv = os.path.join(run_dir, f"{base}_trades.csv")
-        with open(kc_csv, "rb") as f: st.download_button("Download KC CSV", f, file_name=os.path.basename(kc_csv), mime="text/csv")
-        with open(trades_csv, "rb") as f: st.download_button("Download Trades CSV", f, file_name=os.path.basename(trades_csv), mime="text/csv")
-
-        # zip the whole run folder for quick sharing
-        if st.button("Prepare ZIP of this run"):
-            tmp_zip = os.path.join(tempfile.gettempdir(), f"{base}.zip")
-            if os.path.exists(tmp_zip): os.remove(tmp_zip)
-            shutil.make_archive(tmp_zip[:-4], "zip", run_dir, base_dir=run_dir)
-            with open(tmp_zip, "rb") as fzip:
-                st.download_button("Download Run ZIP", fzip, file_name=f"{base}.zip", mime="application/zip")
+        if os.path.exists(kc_csv):
+            with open(kc_csv, "rb") as f: st.download_button("Download KC CSV", f, file_name=os.path.basename(kc_csv), mime="text/csv")
+        if os.path.exists(trades_csv):
+            with open(trades_csv, "rb") as f: st.download_button("Download Trades CSV", f, file_name=os.path.basename(trades_csv), mime="text/csv")
 
 with tabs[1]:
     if state["last"] is None:
         st.info("Run a backtest first.")
     else:
-        tdf = state["last"]["trades"].copy()
-        if tdf.empty:
-            st.warning("No trades generated.")
+        run_dir = state["last"]["run_dir"]; base = state["last"]["base"]
+        kc_csv = os.path.join(run_dir, f"{base}_kc.csv")
+        kdf = safe_read_csv(kc_csv)
+        if kdf is None:
+            st.warning("KC CSV missing or empty.")
         else:
-            st.subheader("Filters")
+            st.subheader("Keltner Channel CSV")
+            st.dataframe(kdf, use_container_width=True, height=480)
+
+with tabs[2]:
+    if state["last"] is None:
+        st.info("Run a backtest first.")
+    else:
+        run_dir = state["last"]["run_dir"]; base = state["last"]["base"]
+        trades_csv = os.path.join(run_dir, f"{base}_trades.csv")
+        tdf = safe_read_csv(trades_csv, parse_date_cols=("entry_time","exit_time"))
+        if tdf is None:
+            st.warning("Trades CSV missing or empty.")
+        else:
+            st.subheader("Trades Explorer")
             colf = st.columns(4)
             with colf[0]: side_f = st.multiselect("Side", ["long","short"], default=["long","short"])
             with colf[1]: min_rr = st.number_input("Min R multiple", value=-5.0, step=0.5)
-            with colf[2]: min_p = st.number_input("Min PnL", value=float(tdf["pnl"].min() if "pnl" in tdf.columns else 0.0), step=10.0)
-            with colf[3]: max_p = st.number_input("Max PnL", value=float(tdf["pnl"].max() if "pnl" in tdf.columns else 0.0), step=10.0)
+            with colf[2]: min_p = st.number_input("Min PnL", value=float(tdf.get("pnl", pd.Series([0])).min()), step=10.0)
+            with colf[3]: max_p = st.number_input("Max PnL", value=float(tdf.get("pnl", pd.Series([0])).max()), step=10.0)
             if "side" in tdf.columns: tdf = tdf[tdf["side"].isin(side_f)]
             if "R" in tdf.columns:    tdf = tdf[tdf["R"] >= min_rr]
             if "pnl" in tdf.columns:  tdf = tdf[(tdf["pnl"] >= min_p) & (tdf["pnl"] <= max_p)]
-            st.dataframe(tdf, use_container_width=True, height=360)
+            st.dataframe(tdf, use_container_width=True, height=420)
             if "R" in tdf.columns and len(tdf) > 0:
                 st.plotly_chart(px.histogram(tdf, x="R", nbins=30, title="Distribution of R multiples"), use_container_width=True)
 
-with tabs[2]:
-    root_outdir = st.session_state.root_outdir.strip() or "runs"
-    dfhist = read_runs_log(root_outdir)
+with tabs[3]:
+    root = (root_outdir or "runs").strip()
+    dfhist = read_all_runs_logs(root)
+    st.subheader("Run History")
     if dfhist.empty:
-        st.info("No runs_log.csv yet. Run at least one backtest.")
+        st.info("No runs_log.csv files found under the save root.")
     else:
-        st.subheader("Run History")
-        tickers = sorted(dfhist["ticker"].dropna().unique()) if "ticker" in dfhist.columns else []
+        tickers = sorted((dfhist["ticker"] if "ticker" in dfhist.columns else dfhist["ticker_folder"]).dropna().astype(str).unique())
         t_sel = st.multiselect("Ticker filter", tickers, default=tickers[:1] if tickers else [])
-        dfhist_v = dfhist[dfhist["ticker"].isin(t_sel)] if t_sel and "ticker" in dfhist.columns else dfhist
-        st.dataframe(dfhist_v, use_container_width=True, height=360)
-        if {"Sharpe","MaxDrawdown"}.issubset(dfhist_v.columns):
-            st.plotly_chart(px.scatter(dfhist_v, x="MaxDrawdown", y="Sharpe", color="ticker" if "ticker" in dfhist_v.columns else None,
-                                       hover_data=["base"] if "base" in dfhist_v.columns else None,
+        if "ticker" in dfhist.columns:
+            base_df = dfhist[dfhist["ticker"].astype(str).isin(t_sel)] if t_sel else dfhist
+        else:
+            base_df = dfhist[dfhist["ticker_folder"].astype(str).isin(t_sel)] if t_sel else dfhist
+        st.dataframe(base_df, use_container_width=True, height=480)
+        if {"Sharpe","MaxDrawdown"}.issubset(base_df.columns):
+            st.plotly_chart(px.scatter(base_df, x="MaxDrawdown", y="Sharpe",
+                                       color=(base_df["ticker"] if "ticker" in base_df.columns else base_df["ticker_folder"]),
+                                       hover_data=["base"] if "base" in base_df.columns else None,
                                        title="Sharpe vs Max Drawdown"), use_container_width=True)
 
-with tabs[3]:
+with tabs[4]:
     if state["last"] is None:
         st.info("Run a backtest first.")
     else:
