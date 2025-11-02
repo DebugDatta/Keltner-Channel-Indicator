@@ -34,7 +34,6 @@ class KCBacktestApp(tk.Tk):
             ctrl.columnconfigure(c, weight=1, uniform="cols")
 
         r = 0
-        # row 0, compact top line
         ttk.Label(ctrl, text="Ticker").grid(row=r, column=0, sticky="w", padx=4, pady=4)
         self.e_ticker = ttk.Entry(ctrl, width=10)
         self.e_ticker.insert(0, "AAPL")
@@ -66,12 +65,11 @@ class KCBacktestApp(tk.Tk):
         self.dd_exec = ttk.Combobox(ctrl, textvariable=self.execution, values=["next_open","next_close"], width=10, state="readonly")
         self.dd_exec.grid(row=r, column=11, sticky="we", padx=4, pady=4)
 
-        # row 1, sliders in compact cells, label above, value at right
         r += 1
-        self._slider(ctrl, r, 0, "EMA", 20, 5, 200, 1)
-        self._slider(ctrl, r, 2, "ATR", 10, 5, 100, 1)
+        self._slider(ctrl, r, 0, "EMA", 20, 5, 200, 1.0)
+        self._slider(ctrl, r, 2, "ATR", 10, 5, 100, 1.0)
         self._slider(ctrl, r, 4, "Multiplier", 2.0, 1.0, 5.0, 0.1)
-        self._slider(ctrl, r, 6, "Risk", 0.01, 0.001, 0.1, 0.001)
+        self._slider(ctrl, r, 6, "Risk", 0.010, 0.001, 0.100, 0.001)
         self._slider(ctrl, r, 8, "Stop x ATR", 2.0, 0.5, 10.0, 0.1)
 
         ttk.Label(ctrl, text="TP x ATR").grid(row=r, column=10, sticky="w", padx=4)
@@ -80,7 +78,6 @@ class KCBacktestApp(tk.Tk):
         self.cb_tp.grid(row=r, column=11, sticky="w")
         r += 1
 
-        # row 2, TP scale spanning 4 columns when enabled
         self.tp_row = r
         self.tp_frame = ttk.Frame(ctrl)
         self.tp_frame.grid(row=r, column=0, columnspan=12, sticky="we", padx=4)
@@ -92,7 +89,6 @@ class KCBacktestApp(tk.Tk):
         self._toggle_tp()
         r += 1
 
-        # row 3, fees warmup and folder
         ttk.Label(ctrl, text="Fee bps").grid(row=r, column=0, sticky="w", padx=4, pady=4)
         self.e_fee = ttk.Entry(ctrl, width=8)
         self.e_fee.insert(0, "1.0")
@@ -116,17 +112,14 @@ class KCBacktestApp(tk.Tk):
         ttk.Button(ctrl, text="Run Backtest", command=self.run).grid(row=r, column=11, sticky="we", padx=4)
 
         r += 1
-        # row 4, export
         ttk.Button(ctrl, text="Export PDF", command=self.export_pdf).grid(row=r, column=10, columnspan=2, sticky="we", padx=4, pady=(0,6))
 
-        # metrics
         self.metrics_box = ttk.LabelFrame(root, text="Metrics")
         self.metrics_box.grid(row=1, column=0, sticky="we", pady=(8, 8))
         self.metrics_box.columnconfigure(0, weight=1)
         self.metrics_text = tk.Text(self.metrics_box, height=4)
         self.metrics_text.grid(row=0, column=0, sticky="we")
 
-        # plots
         self.plot_box = ttk.Notebook(root)
         self.plot_box.grid(row=2, column=0, sticky="nsew")
         root.rowconfigure(2, weight=1)
@@ -150,64 +143,69 @@ class KCBacktestApp(tk.Tk):
         self.plot_box.add(self.canvas_equity_widget, text="Equity")
         self.plot_box.add(self.canvas_dd_widget, text="Drawdown")
 
-        def _slider(self, parent, row, col, label, default, lo, hi, res):
-        # compact slider with editable numeric value
+    def _slider(self, parent, row, col, label, default, lo, hi, res):
+        # slider with editable numeric entry
         cell = ttk.Frame(parent)
         cell.grid(row=row, column=col, columnspan=2, sticky="we", padx=4, pady=2)
         cell.columnconfigure(0, weight=1)
         cell.columnconfigure(1, weight=0)
 
-        lbl = ttk.Label(cell, text=label)
-        lbl.grid(row=0, column=0, sticky="w")
+        ttk.Label(cell, text=label).grid(row=0, column=0, sticky="w")
 
-        val = tk.StringVar(value=str(default))
-        val_entry = ttk.Entry(cell, textvariable=val, width=6)
+        # helpers
+        def _decimals(x: float) -> int:
+            s = f"{x:.10f}".rstrip("0").rstrip(".")
+            return len(s.split(".")[1]) if "." in s else 0
+
+        dec = _decimals(res)
+        def _fmt(v: float) -> str:
+            return f"{v:.{dec}f}" if dec > 0 else f"{int(round(v))}"
+
+        def _snap(v: float) -> float:
+            steps = round((v - lo) / res)
+            sv = lo + steps * res
+            if sv < lo: sv = lo
+            if sv > hi: sv = hi
+            return float(sv)
+
+        val = tk.StringVar(value=_fmt(default))
+        val_entry = ttk.Entry(cell, textvariable=val, width=max(4, dec + 3))
         val_entry.grid(row=0, column=1, sticky="e")
 
         scale = ttk.Scale(cell, from_=lo, to=hi, orient="horizontal")
         scale.set(default)
         scale.grid(row=1, column=0, columnspan=2, sticky="we")
 
-        def _update_value(_evt=None):
+        # live reflect while dragging
+        def _on_motion(v):
             try:
-                v = float(scale.get())
-                v = round(v / res) * res
-                scale.set(v)
-                val.set(f"{v:.3f}" if not res.is_integer() else f"{int(v)}")
+                val.set(_fmt(float(v)))
             except Exception:
                 pass
 
+        # snap on release
+        def _on_release(_evt=None):
+            v = _snap(float(scale.get()))
+            scale.set(v)
+            val.set(_fmt(v))
+
+        # when user edits entry
         def _entry_update(_evt=None):
             try:
                 v = float(val.get())
-                if lo <= v <= hi:
-                    scale.set(v)
-                else:
-                    val.set(f"{scale.get():.3f}")
+                v = max(min(v, hi), lo)
+                v = _snap(v)
+                scale.set(v)
+                val.set(_fmt(v))
             except Exception:
-                val.set(f"{scale.get():.3f}")
+                # revert to current slider value
+                val.set(_fmt(float(scale.get())))
 
-        # sync slider to entry and vice versa
-        scale.bind("<ButtonRelease-1>", _update_value)
+        scale.configure(command=_on_motion)
+        scale.bind("<ButtonRelease-1>", _on_release)
         val_entry.bind("<Return>", _entry_update)
         val_entry.bind("<FocusOut>", _entry_update)
 
-        setattr(self, f"s_{label.replace(' ','_')}", scale)
-
-
-        # snap to resolution on release and update value label
-        def _update_value(_evt=None):
-            v = float(scale.get())
-            # round to resolution
-            steps = round((v - lo) / res)
-            snapped = lo + steps * res
-            scale.set(snapped)
-            if res.is_integer() if isinstance(res, float) else True:
-                val.set(f"{snapped:.0f}" if float(res).is_integer() else f"{snapped:.3f}")
-            else:
-                val.set(f"{snapped:.3f}")
-
-        scale.bind("<ButtonRelease-1>", _update_value)
         setattr(self, f"s_{label.replace(' ','_')}", scale)
 
     def _toggle_tp(self):
@@ -313,6 +311,7 @@ class KCBacktestApp(tk.Tk):
         except Exception as e:
             messagebox.showerror("Ticker error", f"Failed to fetch data for {ticker}\n{e}")
             return
+
         ema_len = int(float(self.s_EMA.get()))
         atr_len = int(float(self.s_ATR.get()))
         mult = float(self.s_Multiplier.get())
