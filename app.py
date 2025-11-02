@@ -143,28 +143,49 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # single-box dual control: slider + one number_input
+# single-box dual control: slider + number_input, fully synced via callbacks
 def dual(label, lo, hi, default, step, fmt, *, is_int=False):
     key = label.replace(" ", "_")
-    if f"{key}_val" not in st.session_state:
-        st.session_state[f"{key}_val"] = default
-    v = st.session_state[f"{key}_val"]
+    slider_key = f"{key}_slider"
+    input_key  = f"{key}_input"
+    val_key    = f"{key}_val"
 
-    # slider
-    v = st.slider(label, lo, hi, v, step=step, key=f"{key}_slider")
+    def _clamp_cast(x):
+        x = max(lo, min(hi, x))
+        if is_int:
+            x = int(round(x))
+        return x
 
-    # one compact box with the numeric input only
+    # init state once
+    if val_key not in st.session_state:
+        st.session_state[val_key] = _clamp_cast(default)
+    if slider_key not in st.session_state:
+        st.session_state[slider_key] = st.session_state[val_key]
+    if input_key not in st.session_state:
+        st.session_state[input_key] = st.session_state[val_key]
+
+    # callbacks keep both widgets in lockstep
+    def _from_slider():
+        v = _clamp_cast(st.session_state[slider_key])
+        st.session_state[input_key] = v
+        st.session_state[val_key] = v
+
+    def _from_input():
+        v = _clamp_cast(st.session_state[input_key])
+        st.session_state[slider_key] = v
+        st.session_state[val_key] = v
+
+    # render widgets
+    v_now = st.session_state[val_key]
+    st.slider(label, lo, hi, v_now, step=step, key=slider_key, on_change=_from_slider)
     with st.container():
         st.markdown('<div class="kc-box">', unsafe_allow_html=True)
-        v = st.number_input(label + " ", lo, hi, v, step=step, format=fmt,
-                            key=f"{key}_input", label_visibility="collapsed")
+        st.number_input(label + " ", lo, hi, st.session_state[input_key],
+                        step=step, format=fmt, key=input_key,
+                        label_visibility="collapsed", on_change=_from_input)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # clamp and cast
-    v = max(lo, min(hi, v))
-    if is_int:
-        v = int(round(v))
-    st.session_state[f"{key}_val"] = v
-    return v
+    return st.session_state[val_key]
 
 # ---------------- sidebar ----------------
 with st.sidebar:
