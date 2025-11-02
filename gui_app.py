@@ -150,8 +150,8 @@ class KCBacktestApp(tk.Tk):
         self.plot_box.add(self.canvas_equity_widget, text="Equity")
         self.plot_box.add(self.canvas_dd_widget, text="Drawdown")
 
-    def _slider(self, parent, row, col, label, default, lo, hi, res):
-        # compact slider cell: label on top, value at right, slider below spanning two columns
+        def _slider(self, parent, row, col, label, default, lo, hi, res):
+        # compact slider with editable numeric value
         cell = ttk.Frame(parent)
         cell.grid(row=row, column=col, columnspan=2, sticky="we", padx=4, pady=2)
         cell.columnconfigure(0, weight=1)
@@ -161,12 +161,39 @@ class KCBacktestApp(tk.Tk):
         lbl.grid(row=0, column=0, sticky="w")
 
         val = tk.StringVar(value=str(default))
-        val_lbl = ttk.Label(cell, textvariable=val)
-        val_lbl.grid(row=0, column=1, sticky="e")
+        val_entry = ttk.Entry(cell, textvariable=val, width=6)
+        val_entry.grid(row=0, column=1, sticky="e")
 
         scale = ttk.Scale(cell, from_=lo, to=hi, orient="horizontal")
         scale.set(default)
         scale.grid(row=1, column=0, columnspan=2, sticky="we")
+
+        def _update_value(_evt=None):
+            try:
+                v = float(scale.get())
+                v = round(v / res) * res
+                scale.set(v)
+                val.set(f"{v:.3f}" if not res.is_integer() else f"{int(v)}")
+            except Exception:
+                pass
+
+        def _entry_update(_evt=None):
+            try:
+                v = float(val.get())
+                if lo <= v <= hi:
+                    scale.set(v)
+                else:
+                    val.set(f"{scale.get():.3f}")
+            except Exception:
+                val.set(f"{scale.get():.3f}")
+
+        # sync slider to entry and vice versa
+        scale.bind("<ButtonRelease-1>", _update_value)
+        val_entry.bind("<Return>", _entry_update)
+        val_entry.bind("<FocusOut>", _entry_update)
+
+        setattr(self, f"s_{label.replace(' ','_')}", scale)
+
 
         # snap to resolution on release and update value label
         def _update_value(_evt=None):
