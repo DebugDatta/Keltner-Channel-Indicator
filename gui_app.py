@@ -1,3 +1,6 @@
+Here’s your updated file, no extra changes beyond light and dark modes, PDF export with inputs metrics and graphs, and per ticker subfolder creation.
+
+```python
 from __future__ import annotations
 import os
 import json
@@ -7,6 +10,7 @@ from datetime import datetime
 import pandas as pd
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+from matplotlib.backends.backend_pdf import PdfPages
 from data import fetch_ohlc
 from indicators import keltner_channel
 from strategy import breakout_signals
@@ -18,8 +22,12 @@ class KCBacktestApp(tk.Tk):
         self.title("Keltner Channel Backtester")
         self.geometry("1200x800")
         self.outdir = tk.StringVar(value="")
+        self.theme = tk.StringVar(value="light")
         self._build_ui()
         self._init_plots()
+        self._init_theme_engine()
+        self._apply_theme()
+        self._last_run_info = None  # {'run_dir': str, 'base': str}
 
     def _build_ui(self):
         root = ttk.Frame(self)
@@ -101,8 +109,17 @@ class KCBacktestApp(tk.Tk):
         ttk.Label(ctrl, text="Save to").grid(row=r, column=6, sticky="w", padx=4, pady=4)
         self.e_outdir = ttk.Entry(ctrl, textvariable=self.outdir, width=30)
         self.e_outdir.grid(row=r, column=7, columnspan=3, sticky="we", padx=4)
-        ttk.Button(ctrl, text="Choose Folder", command=self.choose_outdir).grid(row=r, column=10, sticky="w", padx=4)
-        ttk.Button(ctrl, text="Run Backtest", command=self.run).grid(row=r, column=11, sticky="we", padx=4)
+
+        # Theme control and buttons
+        ttk.Label(ctrl, text="Theme").grid(row=r, column=10, sticky="w", padx=4)
+        self.dd_theme = ttk.Combobox(ctrl, textvariable=self.theme, values=["light","dark"], width=8, state="readonly")
+        self.dd_theme.grid(row=r, column=11, sticky="w", padx=4)
+        self.dd_theme.bind("<<ComboboxSelected>>", lambda e: self._apply_theme())
+
+        r += 1
+        ttk.Button(ctrl, text="Choose Folder", command=self.choose_outdir).grid(row=r, column=6, sticky="w", padx=4)
+        ttk.Button(ctrl, text="Run Backtest", command=self.run).grid(row=r, column=7, sticky="we", padx=4)
+        ttk.Button(ctrl, text="Export PDF", command=self.export_pdf).grid(row=r, column=8, sticky="we", padx=4)
 
         self.metrics_box = ttk.LabelFrame(root, text="Metrics")
         self.metrics_box.pack(side="top", fill="x", pady=(8, 8))
@@ -197,7 +214,8 @@ class KCBacktestApp(tk.Tk):
             json.dump(metrics, f, indent=2)
         met_csv = os.path.join(outdir, f"{base}_metrics.csv")
         pd.DataFrame([metrics]).to_csv(met_csv, index=False)
-        registry_csv = os.path.join(outdir, "runs_log.csv")
+        # keep registry at root chosen folder for overview of all runs
+        registry_csv = os.path.join(os.path.dirname(outdir), "runs_log.csv") if os.path.basename(outdir) else os.path.join(outdir, "runs_log.csv")
         row = {**{"base": base}, **params, **metrics}
         df_row = pd.DataFrame([row])
         if os.path.exists(registry_csv):
@@ -227,11 +245,15 @@ class KCBacktestApp(tk.Tk):
             if not messagebox.askyesno("Confirm", "Both period and start are set. Use period and ignore dates?"):
                 return
             start, end = None, None
-        outdir = self.outdir.get().strip()
-        if not outdir:
+        root_outdir = self.outdir.get().strip()
+        if not root_outdir:
             messagebox.showerror("Error", "Choose an output folder")
             return
-        os.makedirs(outdir, exist_ok=True)
+
+        # per ticker subfolder
+        run_dir = os.path.join(root_outdir, ticker)
+        os.makedirs(run_dir, exist_ok=True)
+
         try:
             df = fetch_ohlc(ticker, start=start, end=end, period=period)
         except Exception as e:
@@ -267,8 +289,8 @@ class KCBacktestApp(tk.Tk):
         base = f"{ticker}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         kc_out = kc.copy()
         kc_out[["long_entry","short_entry","long_exit","short_exit"]] = sig
-        kc_csv = os.path.join(outdir, f"{base}_kc.csv")
-        trades_csv = os.path.join(outdir, f"{base}_trades.csv")
+        kc_csv = os.path.join(run_dir, f"{base}_kc.csv")
+        trades_csv = os.path.join(run_dir, f"{base}_trades.csv")
         kc_out.to_csv(kc_csv)
         res["trades"].to_csv(trades_csv, index=False)
         met = res["metrics"]
@@ -277,11 +299,13 @@ class KCBacktestApp(tk.Tk):
             f"CAGR {met['CAGR']:.2%}  |  Sharpe {met['Sharpe']:.2f}  |  "
             f"Sortino {met['Sortino']:.2f}  |  MaxDD {met['MaxDrawdown']:.2%}  |  "
             f"Exposure {met['Exposure']:.2%}  |  Trades {met['NumTrades']}\n"
-            f"Saved to: {outdir}"
+            f"Saved to: {run_dir}"
         )
         self.metrics_text.delete("1.0", "end")
         self.metrics_text.insert("end", txt)
         self._clear_plots()
+        self._apply_mpl_colors()  # ensure plots follow current theme
+
         self.ax_price.plot(kc.index, kc["Close"], label="Close")
         self.ax_price.plot(kc.index, kc["KC_Middle"], label="KC Middle")
         self.ax_price.plot(kc.index, kc["KC_Upper"], label="KC Upper")
@@ -299,6 +323,7 @@ class KCBacktestApp(tk.Tk):
         self.ax_price.set_xlabel("Date")
         self.ax_price.set_ylabel("Price")
         self.canvas_price.draw()
+
         curve = res["equity"]
         self.ax_equity.plot(curve.index, curve.values, label="Equity")
         self.ax_equity.set_title(f"Equity Curve, {ticker}")
@@ -306,19 +331,22 @@ class KCBacktestApp(tk.Tk):
         self.ax_equity.set_ylabel("Equity")
         self.ax_equity.legend(loc="best")
         self.canvas_equity.draw()
+
         dd = curve / curve.cummax() - 1.0
         self.ax_dd.fill_between(dd.index, dd.values, 0, step="pre")
         self.ax_dd.set_title(f"Drawdown, {ticker}")
         self.canvas_dd.draw()
-        price_png = os.path.join(outdir, f"{base}_kc.png")
-        equity_png = os.path.join(outdir, f"{base}_equity.png")
-        dd_png = os.path.join(outdir, f"{base}_drawdown.png")
+
+        price_png = os.path.join(run_dir, f"{base}_kc.png")
+        equity_png = os.path.join(run_dir, f"{base}_equity.png")
+        dd_png = os.path.join(run_dir, f"{base}_drawdown.png")
         self.fig_price.savefig(price_png, dpi=150, bbox_inches="tight")
         self.fig_equity.savefig(equity_png, dpi=150, bbox_inches="tight")
         self.fig_dd.savefig(dd_png, dpi=150, bbox_inches="tight")
+
         params = self._collect_inputs(ticker, start, end, period)
-        self._save_params_and_metrics(outdir, base, params, metrics_clean)
-        summary_txt = os.path.join(outdir, f"{base}_summary.txt")
+        self._save_params_and_metrics(run_dir, base, params, metrics_clean)
+        summary_txt = os.path.join(run_dir, f"{base}_summary.txt")
         with open(summary_txt, "w", encoding="utf-8") as f:
             f.write(f"Run: {base}\n")
             f.write(f"Timestamp: {params['timestamp']}\n")
@@ -328,7 +356,52 @@ class KCBacktestApp(tk.Tk):
             f.write("\nMetrics:\n")
             for k, v in metrics_clean.items():
                 f.write(f"  {k}: {v}\n")
-        messagebox.showinfo("Done", f"Backtest complete.\nFiles saved in:\n{outdir}")
+
+        # remember last run
+        self._last_run_info = {"run_dir": run_dir, "base": base, "params": params, "metrics": metrics_clean}
+        messagebox.showinfo("Done", f"Backtest complete.\nFiles saved in:\n{run_dir}")
+
+    def export_pdf(self):
+        if not self._last_run_info:
+            messagebox.showerror("Error", "Run a backtest first")
+            return
+        run_dir = self._last_run_info["run_dir"]
+        base = self._last_run_info["base"]
+        params = self._last_run_info["params"]
+        metrics = self._last_run_info["metrics"]
+        pdf_path = os.path.join(run_dir, f"{base}_report.pdf")
+
+        # first page with inputs and metrics as text
+        page = Figure(figsize=(8.27, 11.69))  # A4 portrait in inches
+        ax = page.add_subplot(111)
+        ax.axis("off")
+
+        def fmt_block(title, d):
+            lines = [title]
+            for k, v in d.items():
+                lines.append(f"{k}: {v}")
+            return "\n".join(lines)
+
+        txt = f"Run: {base}\nTimestamp: {params['timestamp']}\n\n"
+        txt += fmt_block("Parameters", params) + "\n\n"
+        txt += fmt_block("Metrics", metrics)
+
+        page.text(0.05, 0.95, "Keltner Channel Backtest Report", fontsize=16, va="top", ha="left", weight="bold")
+        page.text(0.05, 0.90, txt, fontsize=9, va="top", ha="left", family="monospace")
+
+        # save multipage pdf
+        with PdfPages(pdf_path) as pp:
+            # ensure mpl colors match current theme for the text page too
+            self._set_fig_facecolors(page)
+            pp.savefig(page, bbox_inches="tight")
+            self._set_fig_facecolors(self.fig_price)
+            pp.savefig(self.fig_price, bbox_inches="tight")
+            self._set_fig_facecolors(self.fig_equity)
+            pp.savefig(self.fig_equity, bbox_inches="tight")
+            self._set_fig_facecolors(self.fig_dd)
+            pp.savefig(self.fig_dd, bbox_inches="tight")
+
+        messagebox.showinfo("PDF Exported", f"Report saved to:\n{pdf_path}")
 
     @staticmethod
     def _valid_date(s: str) -> bool:
@@ -338,6 +411,110 @@ class KCBacktestApp(tk.Tk):
         except Exception:
             return False
 
+    # Theme support
+    def _init_theme_engine(self):
+        self._colors = {
+            "light": {
+                "bg": "#F5F5F5",
+                "fg": "#000000",
+                "input_bg": "#FFFFFF",
+                "input_fg": "#000000",
+                "frame_bg": "#F5F5F5",
+                "accent": "#1a73e8",
+                "plot_bg": "#FFFFFF",
+                "axes_fg": "#000000",
+                "grid": "#E0E0E0",
+                "text_bg": "#FFFFFF",
+                "text_fg": "#000000",
+                "tab_bg": "#EDEDED",
+                "tab_fg": "#000000",
+            },
+            "dark": {
+                "bg": "#202124",
+                "fg": "#E8EAED",
+                "input_bg": "#2B2C2F",
+                "input_fg": "#E8EAED",
+                "frame_bg": "#202124",
+                "accent": "#8AB4F8",
+                "plot_bg": "#121212",
+                "axes_fg": "#E8EAED",
+                "grid": "#3C4043",
+                "text_bg": "#2B2C2F",
+                "text_fg": "#E8EAED",
+                "tab_bg": "#303134",
+                "tab_fg": "#E8EAED",
+            },
+        }
+        self.style = ttk.Style()
+        try:
+            self.style.theme_use("clam")
+        except Exception:
+            pass
+
+    def _apply_theme(self):
+        t = self.theme.get()
+        c = self._colors[t]
+
+        # root
+        self.configure(bg=c["bg"])
+        for w in self.winfo_children():
+            try:
+                w.configure(style="TFrame")
+            except Exception:
+                pass
+
+        # ttk styles
+        self.style.configure("TFrame", background=c["frame_bg"])
+        self.style.configure("TLabelframe", background=c["frame_bg"], foreground=c["fg"])
+        self.style.configure("TLabelframe.Label", background=c["frame_bg"], foreground=c["fg"])
+        self.style.configure("TLabel", background=c["frame_bg"], foreground=c["fg"])
+        self.style.configure("TButton", foreground=c["fg"])
+        self.style.configure("TCombobox", fieldbackground=c["input_bg"], foreground=c["input_fg"], background=c["input_bg"])
+        self.style.map("TButton", foreground=[("active", c["fg"])])
+        self.style.configure("TNotebook", background=c["tab_bg"])
+        self.style.configure("TNotebook.Tab", background=c["tab_bg"], foreground=c["tab_fg"])
+
+        # tk widgets
+        self.metrics_text.configure(bg=c["text_bg"], fg=c["text_fg"], insertbackground=c["text_fg"])
+
+        # entries that are tk.Entry within ttk.Entry are fine, no extra set
+
+        # matplotlib figures
+        self._apply_mpl_colors()
+
+        # redraw canvases
+        self.canvas_price.draw()
+        self.canvas_equity.draw()
+        self.canvas_dd.draw()
+
+    def _set_fig_facecolors(self, fig: Figure):
+        c = self._colors[self.theme.get()]
+        fig.set_facecolor(c["frame_bg"])
+        for ax in fig.axes:
+            ax.set_facecolor(c["plot_bg"])
+            ax.tick_params(colors=c["axes_fg"])
+            for spine in ax.spines.values():
+                spine.set_color(c["axes_fg"])
+            grid_color = c["grid"]
+            ax.grid(True, color=grid_color, alpha=0.4)
+
+            # update text colors
+            if ax.title:
+                ax.title.set_color(c["axes_fg"])
+            ax.xaxis.label.set_color(c["axes_fg"])
+            ax.yaxis.label.set_color(c["axes_fg"])
+            leg = ax.get_legend()
+            if leg:
+                for text in leg.get_texts():
+                    text.set_color(c["axes_fg"])
+
+    def _apply_mpl_colors(self):
+        # apply to existing figs
+        self._set_fig_facecolors(self.fig_price)
+        self._set_fig_facecolors(self.fig_equity)
+        self._set_fig_facecolors(self.fig_dd)
+
 if __name__ == "__main__":
     app = KCBacktestApp()
     app.mainloop()
+```
