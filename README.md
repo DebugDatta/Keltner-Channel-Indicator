@@ -2,10 +2,12 @@
 
 ---
 
-A complete Python project with a **Tkinter-based GUI** that calculates, visualizes, and backtests the **Keltner Channel** — a volatility-based technical indicator used by traders to identify trends, breakouts, and reversals.
+A complete Python project with a **Tkinter-based GUI** and a **Streamlit web app** that calculates, visualizes, and backtests the **Keltner Channel** — a volatility-based technical indicator used by traders to identify trends, breakouts, and reversals.
 
 This project lets you interact with sliders, dropdowns, and file choosers directly in a graphical interface — no terminal needed.
-It uses live data from Yahoo Finance, runs a backtest, displays metrics and plots in the same window, and saves all results (charts and CSVs) automatically.
+You can also use the web app in your browser with interactive dashboards, CSV views, and a PDF report builder.
+
+It uses live data from Yahoo Finance, runs a backtest, displays metrics and plots in the same window or browser, and saves all results automatically.
 
 ---
 
@@ -25,7 +27,7 @@ The **Keltner Channel** is a volatility envelope consisting of three lines aroun
 * Price below the lower band → bearish breakdown
 * Price within the bands → consolidation or low volatility phase
 
-Traders use the Keltner Channel to identify trend direction, catch breakouts early, and set stop-loss/take-profit levels that adapt to volatility.
+Traders use the Keltner Channel to identify trend direction, catch breakouts early, and set stop-loss or take-profit levels that adapt to volatility.
 
 ---
 
@@ -33,15 +35,15 @@ Traders use the Keltner Channel to identify trend direction, catch breakouts ear
 
 ---
 
-The GUI app automates:
+The app automates:
 
 1. **Data Fetching** – Pulls OHLC data from Yahoo Finance
 2. **Indicator Computation** – Calculates EMA, ATR, and Keltner Channel
 3. **Signal Generation** – Detects entry and exit points from breakouts
-4. **Backtesting** – Simulates realistic trades with risk management, slippage, and fees
-5. **Performance Metrics** – Computes CAGR, Sharpe, Sortino, Max Drawdown, Exposure, etc.
-6. **Visualization** – Shows all charts (price, equity, drawdown) inside the GUI
-7. **Export** – Saves Metrices, CSVs and PNGs of results along with input parameters to a user-selected folder
+4. **Backtesting** – Simulates trades with risk, slippage, and fees
+5. **Performance Metrics** – Computes CAGR, Sharpe, Sortino, Max Drawdown, Exposure, etc
+6. **Visualization** – Shows price, equity, and drawdown charts
+7. **Export** – Saves metrics, CSVs, PNGs, and a PDF report with inputs, metrics, and charts
 
 ---
 
@@ -49,17 +51,28 @@ The GUI app automates:
 
 ---
 
-- User-friendly **GUI built with Tkinter**
-- **Ticker input** box with real-time validation (errors shown instantly)
-- **Sliders** for EMA, ATR, multiplier, risk, stop × ATR, and take-profit × ATR
-- **Dropdowns** for side (`long_only`, `short_only`, `long_short`) and execution mode (`next_open`, `next_close`)
-- **Automatic folder chooser** to pick where to save results
-- **Live metrics panel** with CAGR, Sharpe, Sortino, Max Drawdown, Exposure, Trades count
-- **Embedded Matplotlib charts** for:
-   * Price with Keltner Bands and trade markers
-   * Equity curve
-   * Drawdown curve
-- **CSV and PNG export** for all results
+* **Tkinter GUI**
+
+  * Ticker input, period or dates, side, execution
+  * Sliders for EMA, ATR, multiplier, risk, stop × ATR, optional take-profit × ATR
+  * Folder chooser to save results
+  * Embedded Matplotlib charts and live metrics
+  * Per ticker subfolder creation and run registry
+
+* **Streamlit Web App**
+
+  * Same inputs and strategy as GUI
+  * Sliders with a single compact value box under each slider
+  * Tabs:
+
+    * **Backtest** – interactive OHLC with Keltner, equity, drawdown
+    * **KC CSV** – full Keltner Channel dataset table
+    * **Trades Explorer** – filters, table from saved trades CSV, R histogram
+    * **Run History** – aggregates all `runs_log.csv` from each ticker subfolder
+    * **Report Builder** – one click PDF with inputs, metrics, and selected charts
+  * Per ticker subfolder creation under the chosen root
+  * **`runs_log.csv` saved inside each ticker subfolder**
+  * Download buttons for CSVs, optional ZIP of a run
 
 ---
 
@@ -103,46 +116,98 @@ The GUI app automates:
 
 Simply execute:
 
-   ```bash
-   python gui_app.py
-   ```
+```bash
+python gui_app.py
+```
 
 A graphical window will open.
 
 Inside the GUI:
 
-1. Enter a ticker (e.g., `AAPL`, `RELIANCE.NS`, `BTC-USD`)
+1. Enter a ticker, for example `AAPL`, `RELIANCE.NS`, `BTC-USD`
 2. Choose period or date range
-3. Adjust sliders for EMA, ATR, Multiplier, Risk %, Stop × ATR, and optionally Take-Profit × ATR
-4. Pick Side (`long_only`, `short_only`, `long_short`) and Execution (`next_open`, `next_close`)
-5. Click **Choose Folder** to set where results will be saved
+3. Adjust EMA, ATR, Multiplier, Risk %, Stop × ATR, optional Take-Profit × ATR
+4. Pick Side `long_only`, `short_only`, or `long_short` and Execution `next_open` or `next_close`
+5. Click **Choose Folder**
 6. Click **Run Backtest**
 
-The app will:
-- Validate the ticker
-- Download data
-- Run the strategy
-- Display metrics and charts
-- Save:
-  ```
-  <output_root>/                     ← the folder you select in the GUI
-  │
-  └── <ticker>/                      ← automatically created subfolder
-      ├── runs_log.csv               ← appends each new run for this ticker
-      │
-      ├── <ticker>_<timestamp>_kc.csv
-      ├── <ticker>_<timestamp>_trades.csv
-      ├── <ticker>_<timestamp>_kc.png
-      ├── <ticker>_<timestamp>_equity.png
-      ├── <ticker>_<timestamp>_drawdown.png
-      ├── <ticker>_<timestamp>_params.json
-      ├── <ticker>_<timestamp>_metrics.json
-      ├── <ticker>_<timestamp>_metrics.csv
-      └── <ticker>_<timestamp>_summary.txt
+The app will download data, run the strategy, show metrics and charts, and save:
 
-  ```
-  in your selected folder.
+```
+<output_root>/
+│
+└── <ticker>/
+    ├── runs_log.csv
+    │
+    ├── <ticker>_<timestamp>_kc.csv
+    ├── <ticker>_<timestamp>_trades.csv
+    ├── <ticker>_<timestamp>_kc.png
+    ├── <ticker>_<timestamp>_equity.png
+    ├── <ticker>_<timestamp>_drawdown.png
+    ├── <ticker>_<timestamp>_params.json
+    ├── <ticker>_<timestamp>_metrics.json
+    ├── <ticker>_<timestamp>_metrics.csv
+    └── <ticker>_<timestamp>_summary.txt
+```
 
+---
+
+## HOW TO RUN (WEB APP MODE)
+
+---
+
+1. Start the Streamlit app:
+
+   ```bash
+   streamlit run app.py
+   ```
+
+2. Open in your browser:
+
+   ```
+   http://localhost:8501
+   ```
+
+3. For LAN access:
+
+   ```bash
+   streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+   ```
+
+Use the sidebar to set inputs and the root save folder.
+The app will create a **per ticker subfolder** and save all outputs there, including `runs_log.csv` inside that subfolder.
+
+---
+
+## OUTPUTS SAVED
+
+---
+
+* **CSV**
+
+  * Keltner Channel data `*_kc.csv`
+  * Trades `*_trades.csv`
+  * Metrics `*_metrics.csv`
+  * Run registry `runs_log.csv` inside each ticker subfolder
+
+* **JSON**
+
+  * Parameters `*_params.json`
+  * Metrics `*_metrics.json`
+
+* **Images**
+
+  * `*_kc.png`, `*_equity.png`, `*_drawdown.png`
+
+* **PDF**
+
+  * Report with inputs, metrics, and selected charts
+
+* **TXT**
+
+  * `*_summary.txt` with inputs and metrics
+
+All filenames include the timestamp.
 
 ---
 
@@ -150,15 +215,15 @@ The app will:
 
 ---
 
-- **EMA (Exponential Moving Average):** Fast-reacting average used for trend detection
-- **ATR (Average True Range):** Volatility measure showing average range of movement
-- **Multiplier:** Determines channel width; larger = fewer signals
-- **Risk (%):** Fraction of capital risked per trade
-- **Stop/TP multiples:** Dynamic exits based on ATR volatility
-- **Fee_bps / Slip_bps:** Trading cost modeling in basis points (1bps = 0.01%)
-- **CAGR:** Average annual portfolio growth
-- **Sharpe / Sortino:** Risk-adjusted returns
-- **Max Drawdown:** Largest peak-to-trough equity decline
+* **EMA:** Fast trend average
+* **ATR:** Volatility gauge
+* **Multiplier:** Channel width factor
+* **Risk (%):** Fraction of capital risked per trade
+* **Stop/TP multiples:** ATR based exits
+* **Fee_bps / Slip_bps:** Costs in basis points
+* **CAGR:** Annualized growth
+* **Sharpe / Sortino:** Risk adjusted returns
+* **Max Drawdown:** Peak to trough fall
 
 ---
 
@@ -166,10 +231,10 @@ The app will:
 
 ---
 
-- Works only on daily OHLC data
-- Handles one instrument per test
-- Ignores dividends and corporate events
-- Meant for learning and research, not live trading
+* Daily OHLC data only
+* Single instrument per run
+* No dividends or corporate actions
+* Research use, not live trading
 
 ---
 
@@ -177,11 +242,11 @@ The app will:
 
 ---
 
-- Add portfolio-level testing
-- Automated parameter optimization
-- Multi-asset comparison mode
-- Trend filters like SMA200 confirmation
-- Advanced GUI themes and dashboards
+* Portfolio backtests
+* Parameter sweeps and optimization
+* Multi asset comparisons
+* Trend filters like SMA200
+* More report layouts
 
 ---
 
