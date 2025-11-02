@@ -207,15 +207,21 @@ Each ticker’s run produces:
 
 ---
 
-* **EMA (Exponential Moving Average):** Smooths prices for trend detection
-* **ATR (Average True Range):** Measures volatility
-* **Multiplier:** Expands or contracts the channel width
-* **Risk (%):** Fraction of capital per trade
-* **Stop/TP multiples:** ATR-based exit levels
-* **Fee_bps / Slip_bps:** Transaction cost in basis points
-* **CAGR:** Annual growth rate
-* **Sharpe / Sortino:** Risk-adjusted returns
-* **Max Drawdown:** Largest equity drop
+* **EMA (Exponential Moving Average):** Weighted average that reacts faster to recent prices, used to detect trend direction.
+* **ATR (Average True Range):** Measures market volatility by averaging the range between daily highs and lows.
+* **KC (Keltner Channel):** Volatility bands built around EMA using ATR, helps identify breakouts and reversals.
+* **CAGR (Compound Annual Growth Rate):** Average yearly growth of portfolio value over the backtest period.
+* **Sharpe Ratio:** Risk-adjusted return showing how much excess return is earned per unit of volatility.
+* **Sortino Ratio:** Similar to Sharpe but considers only downside volatility as risk.
+* **Max DD (Maximum Drawdown):** Largest peak-to-trough portfolio loss, indicates worst historical dip.
+* **Risk % (Risk per Trade):** Portion of total capital allocated to one trade, controls position size.
+* **Stop × ATR (Stop-loss Multiplier):** Stop-loss distance scaled by market volatility (ATR).
+* **TP × ATR (Take-Profit Multiplier):** Profit target distance based on ATR multiples.
+* **Fee bps (Basis Points):** Trading cost where 1 bps = 0.01%, used for brokerage or exchange fees.
+* **Slippage:** Difference between expected and executed trade prices due to market movement.
+* **Exposure:** Percentage of total time the strategy remains invested in active trades.
+* **Equity Curve:** Graph showing portfolio value progression across time.
+* **Backtest:** Simulation of historical trades to measure past strategy performance.
 
 ---
 
