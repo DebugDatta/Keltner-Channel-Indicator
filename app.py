@@ -1,20 +1,18 @@
 from __future__ import annotations
-import os, io, json, tempfile, shutil
+import os, io, json
 from datetime import datetime
 import pandas as pd
-import numpy as np
 import streamlit as st
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_pdf import PdfPages
 import plotly.graph_objects as go
 import plotly.express as px
 
-from data import fetch_ohlc
+from data import fetch_ohlc, interval_limit
 from indicators import keltner_channel
-from strategy import breakout_signals
+from strategy import keltner_signals
 from backtester import run_backtest, BTParams
 
-# ---------------- setup ----------------
 st.set_page_config(page_title="Keltner Backtester", layout="wide")
 
 def make_dirs(root: str, ticker: str):
@@ -27,7 +25,6 @@ def make_dirs(root: str, ticker: str):
 def dd_series(equity: pd.Series):
     return equity / equity.cummax() - 1.0
 
-# safe csv reader
 def safe_read_csv(path: str, parse_date_cols: tuple[str, ...] = ()) -> pd.DataFrame | None:
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         return None
@@ -40,7 +37,6 @@ def safe_read_csv(path: str, parse_date_cols: tuple[str, ...] = ()) -> pd.DataFr
             df[c] = pd.to_datetime(df[c], errors="coerce")
     return df
 
-# mpl figs
 def mpl_price(kc: pd.DataFrame, trades: pd.DataFrame, ticker: str) -> Figure:
     fig = Figure(figsize=(8,3)); ax = fig.add_subplot(111)
     ax.plot(kc.index, kc["Close"], label="Close")
@@ -67,24 +63,36 @@ def mpl_drawdown(eq: pd.Series, ticker: str) -> Figure:
     ax.fill_between(dd.index, dd.values, 0, step="pre"); ax.set_title(f"Drawdown, {ticker}")
     ax.grid(True, alpha=0.3); fig.tight_layout(); return fig
 
-# plotly figs
 def plotly_price_ohlc(kc: pd.DataFrame, trades: pd.DataFrame, ticker: str) -> go.Figure:
-    df = kc.reset_index().rename(columns={"index":"Date"})
-    fig = go.Figure([go.Candlestick(x=df["Date"], open=df["Open"], high=df["High"],
-                                    low=df["Low"], close=df["Close"], name="OHLC")])
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["KC_Middle"], name="KC Mid"))
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["KC_Upper"], name="KC Upper"))
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["KC_Lower"], name="KC Lower"))
-    if not trades.empty:
-        L = trades[trades["side"]=="long"]; S = trades[trades["side"]=="short"]
-        fig.add_trace(go.Scatter(x=L["entry_time"], y=L["entry_px"], mode="markers", name="Long In",
-                                 marker_symbol="triangle-up", marker_size=8))
-        fig.add_trace(go.Scatter(x=L["exit_time"], y=L["exit_px"], mode="markers", name="Long Out",
-                                 marker_symbol="triangle-down", marker_size=8))
-        fig.add_trace(go.Scatter(x=S["entry_time"], y=S["entry_px"], mode="markers", name="Short In",
-                                 marker_symbol="triangle-down", marker_size=8))
-        fig.add_trace(go.Scatter(x=S["exit_time"], y=S["exit_px"], mode="markers", name="Short Out",
-                                 marker_symbol="triangle-up", marker_size=8))
+    x = kc.index  # robust, no reset_index games
+    fig = go.Figure([
+        go.Candlestick(
+            x=x,
+            open=kc["Open"],
+            high=kc["High"],
+            low=kc["Low"],
+            close=kc["Close"],
+            name="OHLC"
+        )
+    ])
+    fig.add_trace(go.Scatter(x=x, y=kc["KC_Middle"], name="KC Mid"))
+    fig.add_trace(go.Scatter(x=x, y=kc["KC_Upper"],  name="KC Upper"))
+    fig.add_trace(go.Scatter(x=x, y=kc["KC_Lower"],  name="KC Lower"))
+
+    if trades is not None and not trades.empty:
+        L = trades[trades["side"] == "long"]
+        S = trades[trades["side"] == "short"]
+        if not L.empty:
+            fig.add_trace(go.Scatter(x=L["entry_time"], y=L["entry_px"], mode="markers",
+                                     name="Long In", marker_symbol="triangle-up", marker_size=8))
+            fig.add_trace(go.Scatter(x=L["exit_time"], y=L["exit_px"], mode="markers",
+                                     name="Long Out", marker_symbol="triangle-down", marker_size=8))
+        if not S.empty:
+            fig.add_trace(go.Scatter(x=S["entry_time"], y=S["entry_px"], mode="markers",
+                                     name="Short In", marker_symbol="triangle-down", marker_size=8))
+            fig.add_trace(go.Scatter(x=S["exit_time"], y=S["exit_px"], mode="markers",
+                                     name="Short Out", marker_symbol="triangle-up", marker_size=8))
+
     fig.update_layout(title=f"{ticker} Keltner Channel", xaxis_rangeslider_visible=False, height=420)
     return fig
 
@@ -98,7 +106,6 @@ def plotly_dd(eq: pd.Series) -> go.Figure:
     fig = go.Figure(); fig.add_trace(go.Scatter(x=dd["Date"], y=dd["Drawdown"], fill="tozeroy", name="Drawdown"))
     fig.update_layout(title="Drawdown", height=320); return fig
 
-# pdf
 def build_pdf(params: dict, metrics: dict, fig_price: Figure, fig_equity: Figure, fig_dd: Figure,
               include_text=True, include_price=True, include_equity=True, include_dd=True) -> bytes:
     buf = io.BytesIO()
@@ -118,7 +125,6 @@ def build_pdf(params: dict, metrics: dict, fig_price: Figure, fig_equity: Figure
         if include_dd:     pp.savefig(fig_dd,     bbox_inches="tight")
     buf.seek(0); return buf.read()
 
-# aggregate logs from subfolders
 @st.cache_data
 def read_all_runs_logs(root_outdir: str) -> pd.DataFrame:
     if not os.path.isdir(root_outdir):
@@ -134,7 +140,6 @@ def read_all_runs_logs(root_outdir: str) -> pd.DataFrame:
                 frames.append(df)
     return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
-# ---------------- compact value box styling (single box only) ----------------
 st.markdown("""
 <style>
 .kc-box {border:1px solid var(--secondary-background-color);
@@ -142,8 +147,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# single-box dual control: slider + one number_input
-# single-box dual control: slider + number_input, fully synced via callbacks
 def dual(label, lo, hi, default, step, fmt, *, is_int=False):
     key = label.replace(" ", "_")
     slider_key = f"{key}_slider"
@@ -156,7 +159,6 @@ def dual(label, lo, hi, default, step, fmt, *, is_int=False):
             x = int(round(x))
         return x
 
-    # init state once
     if val_key not in st.session_state:
         st.session_state[val_key] = _clamp_cast(default)
     if slider_key not in st.session_state:
@@ -164,7 +166,6 @@ def dual(label, lo, hi, default, step, fmt, *, is_int=False):
     if input_key not in st.session_state:
         st.session_state[input_key] = st.session_state[val_key]
 
-    # callbacks keep both widgets in lockstep
     def _from_slider():
         v = _clamp_cast(st.session_state[slider_key])
         st.session_state[input_key] = v
@@ -175,43 +176,92 @@ def dual(label, lo, hi, default, step, fmt, *, is_int=False):
         st.session_state[slider_key] = v
         st.session_state[val_key] = v
 
-    # render widgets
     v_now = st.session_state[val_key]
-    st.slider(label, lo, hi, v_now, step=step, key=slider_key, on_change=_from_slider)
+    st.slider(label, lo, hi, step=step, key=slider_key, on_change=_from_slider)
     with st.container():
         st.markdown('<div class="kc-box">', unsafe_allow_html=True)
-        st.number_input(label + " ", lo, hi, st.session_state[input_key],
+        st.number_input(label + " ", lo, hi,
                         step=step, format=fmt, key=input_key,
                         label_visibility="collapsed", on_change=_from_input)
         st.markdown('</div>', unsafe_allow_html=True)
 
     return st.session_state[val_key]
 
-# ---------------- sidebar ----------------
 with st.sidebar:
     st.header("Inputs")
     ticker = st.text_input("Ticker", "AAPL").strip().upper()
-    period = st.selectbox("Period", ["", "1mo","3mo","6mo","1y","2y","5y","10y","max"], index=6)
+
+    # select interval
+    interval = st.selectbox(
+        "Interval",
+        ["1m","2m","5m","15m","30m","1h","1d","1wk","1mo"],
+        index=6
+    )
+    lim = interval_limit(interval)
+    st.info(f"Max lookback for {interval} is {lim['period_hint']}  {lim['note']}")
+
+    # map interval to allowed periods
+    if interval in ["1m"]:
+        # ~7 days data
+        period_opts = ["1d","2d","3d","5d","7d"]
+    elif interval in ["2m","5m","15m","30m","90m"]:
+        # up to ~60 days
+        period_opts = ["1d","2d","3d","5d","10d","15d","30d","45d","60d"]
+    elif interval in ["1h"]:
+        # up to ~730 days (~2 years)
+        period_opts = ["1mo","2mo","3mo","6mo","9mo","1y","18mo","2y"]
+    elif interval in ["1d"]:
+        # full range daily
+        period_opts = ["1mo","2mo","3mo","6mo","9mo","1y","2y","3y","5y","10y","ytd","max"]
+    elif interval in ["1wk"]:
+        # weekly long lookback
+        period_opts = ["3mo","6mo","1y","2y","3y","5y","10y","ytd","max"]
+    elif interval in ["1mo"]:
+        # monthly long lookback
+        period_opts = ["1y","2y","3y","5y","10y","ytd","max"]
+    else:
+        period_opts = ["1mo","3mo","6mo","1y","2y","5y","10y","max"]
+
+    period = st.selectbox("Period", [""] + period_opts, index=0)
+
     c1, c2 = st.columns(2)
     with c1: start = st.text_input("Start YYYY-MM-DD", "")
     with c2: end   = st.text_input("End YYYY-MM-DD", "")
+    if period and lim["max_days"] is not None:
+        st.warning(f"{interval} returns only about {lim['period_hint']} of data, reduce Period or use Start/End if empty result.")
 
     side = st.selectbox("Side", ["long_only","short_only","long_short"], index=2)
     execution = st.selectbox("Execution", ["next_open","next_close"], index=0)
+    strategy_mode = st.selectbox(
+        "Strategy",
+        ["momentum","mean_reversion","percentb","pullback","regime_switch"],
+        index=0
+    )
 
-    st.markdown("**Parameters**")
+    st.markdown("Parameters")
     ema_len   = dual("EMA", 5, 200, 20, 1, "%d", is_int=True)
     atr_len   = dual("ATR", 5, 100, 10, 1, "%d", is_int=True)
     mult      = dual("Multiplier", 1.0, 5.0, 2.0, 0.1, "%.1f")
+
+    pb_low = pb_high = None
+    slope_len = strong_mult = None
+    if strategy_mode == "percentb":
+        pb_low  = dual("PercentB low", 0.00, 0.50, 0.20, 0.01, "%.2f")
+        pb_high = dual("PercentB high", 0.50, 1.00, 0.80, 0.01, "%.2f")
+    if strategy_mode in ("pullback","regime_switch"):
+        slope_len   = dual("Slope len", 2, 100, 20, 1, "%d", is_int=True)
+    if strategy_mode == "regime_switch":
+        strong_mult = dual("Strength x STD", 0.2, 3.0, 1.0, 0.1, "%.1f")
+
     risk      = dual("Risk per trade", 0.001, 0.100, 0.010, 0.001, "%.3f")
     stop_mult = dual("Stop x ATR", 0.5, 10.0, 2.0, 0.1, "%.1f")
     tp_enable = st.checkbox("Enable Take Profit x ATR", value=False)
     tp_mult   = dual("Take Profit x ATR", 0.5, 10.0, 4.0, 0.1, "%.1f") if tp_enable else None
 
-    st.markdown("**Save location**")
+    st.markdown("Save location")
     root_outdir = st.text_input("Save root folder", "runs")
 
-    st.markdown("**Costs & Run**")
+    st.markdown("Costs and Run")
     fee_bps = st.number_input("Fee bps", 0.0, 50.0, 1.0, 0.1)
     slip_bps = st.number_input("Slip bps", 0.0, 100.0, 2.0, 0.1)
     warm_override = st.number_input("Warmup override bars", 0, 500, 0, 1)
@@ -224,22 +274,28 @@ if period and (start or end):
 state = st.session_state
 if "last" not in state: state["last"] = None
 
-# ---------------- run backtest ----------------
 if run_btn:
-    root_outdir = root_outdir.strip() or "runs"
-    if not ticker:
-        st.error("Ticker required"); st.stop()
-
-    run_dir, base = make_dirs(root_outdir, ticker)
+    run_dir, base = make_dirs(root_outdir.strip() or "runs", ticker)
     try:
         df = fetch_ohlc(ticker, start=None if period else (start or None),
                         end=None if period else (end or None),
-                        period=period or None)
+                        period=period or None,
+                        interval=interval)
     except Exception as e:
         st.error(f"Data fetch failed: {e}"); st.stop()
 
     kc = keltner_channel(df, ema_len=int(ema_len), atr_len=int(atr_len), mult=float(mult))
-    sig = breakout_signals(kc)
+
+    sig_kwargs = {}
+    if strategy_mode == "percentb":
+        sig_kwargs = {"low": float(pb_low), "high": float(pb_high)}
+    if strategy_mode == "pullback":
+        sig_kwargs = {"slope_len": int(slope_len)}
+    if strategy_mode == "regime_switch":
+        sig_kwargs = {"slope_len": int(slope_len), "strong_mult": float(strong_mult)}
+
+    sig = keltner_signals(kc, mode=strategy_mode, **sig_kwargs)
+
     warmup = int(warm_override) if warm_override > 0 else max(int(ema_len), int(atr_len))
     bt = BTParams(
         execution=execution, initial_capital=100000.0, side=side,
@@ -257,37 +313,31 @@ if run_btn:
 
     params = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
-        "base": base, "ticker": ticker, "period": period or "", "start": start or "", "end": end or "",
-        "side": side, "execution": execution, "ema_len": int(ema_len), "atr_len": int(atr_len),
-        "multiplier": float(mult), "risk_per_trade": float(risk), "atr_stop_mult": float(stop_mult),
+        "base": base, "ticker": ticker, "period": period or "", "interval": interval,
+        "start": start or "", "end": end or "",
+        "side": side, "execution": execution, "strategy": strategy_mode,
+        "ema_len": int(ema_len), "atr_len": int(atr_len), "multiplier": float(mult),
+        "risk_per_trade": float(risk), "atr_stop_mult": float(stop_mult),
         "take_profit_mult_enabled": tp_enable, "take_profit_mult": float(tp_mult) if tp_enable else None,
         "fee_bps": float(fee_bps), "slip_bps": float(slip_bps), "warmup_override": int(warmup),
     }
+    if strategy_mode == "percentb":
+        params.update({"pb_low": float(pb_low), "pb_high": float(pb_high)})
+    if strategy_mode in ("pullback","regime_switch"):
+        params.update({"slope_len": int(slope_len)})
+    if strategy_mode == "regime_switch":
+        params.update({"strong_mult": float(strong_mult)})
+
     with open(os.path.join(run_dir, f"{base}_params.json"), "w", encoding="utf-8") as f: json.dump(params, f, indent=2)
     metrics_clean = {k: float(v) if hasattr(v, "__float__") else v for k, v in metrics.items()}
     with open(os.path.join(run_dir, f"{base}_metrics.json"), "w", encoding="utf-8") as f: json.dump(metrics_clean, f, indent=2)
     pd.DataFrame([metrics_clean]).to_csv(os.path.join(run_dir, f"{base}_metrics.csv"), index=False)
-
-    # runs_log.csv inside ticker subfolder
-    registry_csv = os.path.join(run_dir, "runs_log.csv")
-    row = {**{"base": base}, **params, **metrics_clean}
-    df_row = pd.DataFrame([row])
-    if os.path.exists(registry_csv):
-        try:
-            old = safe_read_csv(registry_csv)
-            if old is None: df_row.to_csv(registry_csv, index=False)
-            else: pd.concat([old, df_row], ignore_index=True).to_csv(registry_csv, index=False)
-        except Exception:
-            df_row.to_csv(registry_csv, index=False)
-    else:
-        df_row.to_csv(registry_csv, index=False)
 
     f_price = mpl_price(kc, trades, ticker); f_eq = mpl_equity(equity, ticker); f_dd = mpl_drawdown(equity, ticker)
     state["last"] = {"run_dir": run_dir, "base": base, "kc": kc, "trades": trades, "equity": equity,
                      "params": params, "metrics": metrics_clean, "mpl": {"price": f_price, "equity": f_eq, "dd": f_dd}}
     st.success(f"Saved in: {run_dir}")
 
-# ---------------- tabs ----------------
 tabs = st.tabs(["Backtest", "KC CSV", "Trades Explorer", "Run History", "Report Builder"])
 
 with tabs[0]:
@@ -351,7 +401,7 @@ with tabs[2]:
                 st.plotly_chart(px.histogram(tdf, x="R", nbins=30, title="Distribution of R multiples"), use_container_width=True)
 
 with tabs[3]:
-    root = (root_outdir or "runs").strip()
+    root = (st.session_state.get("root_outdir", "runs")).strip()
     dfhist = read_all_runs_logs(root)
     st.subheader("Run History")
     if dfhist.empty:

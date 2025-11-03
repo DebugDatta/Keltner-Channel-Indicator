@@ -1,13 +1,12 @@
 from __future__ import annotations
 import argparse, os
-from data import fetch_ohlc
+from data import fetch_ohlc, interval_limit
 from indicators import keltner_channel
-from strategy import breakout_signals
+from strategy import keltner_signals
 from backtester import run_backtest, BTParams
 from plotting import plot_price_kc, plot_equity, plot_drawdown
 
 def ask(prompt, default=None, cast=str, valid_range=None, choices=None):
-    """Safe user input with validation"""
     while True:
         s = input(f"{prompt} [{default}]: ").strip()
         if s == "" and default is not None:
@@ -30,40 +29,65 @@ def interactive_inputs():
     print("\nINTERACTIVE MODE — PRESS ENTER TO ACCEPT DEFAULTS\n")
     cfg = {}
 
-    cfg["ticker"] = ask("Ticker symbol (e.g. AAPL, BTC-USD, RELIANCE.NS)", "AAPL", str)
+    cfg["ticker"] = ask("Ticker symbol", "AAPL", str)
 
     use_period = ask("Use period instead of start/end? (yes/no)", "yes", str).lower().startswith("y")
     if use_period:
-        cfg["period"] = ask("Period (valid: 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, max)", "5y", str)
+        cfg["period"] = ask("Period (1mo,3mo,6mo,1y,2y,5y,10y,max)", "5y", str)
         cfg["start"], cfg["end"] = None, None
     else:
         cfg["period"] = None
         cfg["start"] = ask("Start date (YYYY-MM-DD)", "2018-01-01", str)
-        cfg["end"] = ask("End date (YYYY-MM-DD or leave blank)", "", str) or None
+        cfg["end"] = ask("End date (YYYY-MM-DD or blank)", "", str) or None
+
+    cfg["interval"] = ask(
+        "Interval (1m,2m,5m,15m,30m,1h,1d,1wk,1mo)",
+        "1d",
+        str,
+        choices=["1m","2m","5m","15m","30m","1h","1d","1wk","1mo"]
+    )
+    lim = interval_limit(cfg["interval"])
+    print(f"Max lookback for {cfg['interval']} is {lim['period_hint']}  {lim['note']}")
 
     print("\n--- INDICATOR PARAMETERS ---")
-    cfg["ema"] = ask("EMA periods (typical 10–50)", 20, int, valid_range=(5, 200))
-    cfg["atr"] = ask("ATR periods (typical 5–30)", 10, int, valid_range=(5, 100))
-    cfg["mult"] = ask("ATR multiplier (1.5–4.0 typical)", 2.0, float, valid_range=(1.0, 5.0))
+    cfg["ema"] = ask("EMA periods", 20, int, valid_range=(5, 200))
+    cfg["atr"] = ask("ATR periods", 10, int, valid_range=(5, 100))
+    cfg["mult"] = ask("ATR multiplier", 2.0, float, valid_range=(1.0, 5.0))
+
+    print("\n--- STRATEGY ---")
+    cfg["strategy"] = ask(
+        "Strategy (momentum / mean_reversion / percentb / pullback / regime_switch)",
+        "momentum",
+        str,
+        choices=["momentum","mean_reversion","percentb","pullback","regime_switch"]
+    )
 
     print("\n--- RISK & TRADE SETTINGS ---")
-    cfg["risk"] = ask("Risk per trade as fraction of capital (0.005–0.05 typical)", 0.01, float, valid_range=(0.001, 0.1))
-    cfg["stop"] = ask("Stop loss multiple of ATR (1.0–5.0 typical)", 2.0, float, valid_range=(0.5, 10.0))
-    tp_str = ask("Take profit multiple of ATR (blank for None)", "", str)
+    cfg["risk"] = ask("Risk per trade fraction", 0.01, float, valid_range=(0.001, 0.1))
+    cfg["stop"] = ask("Stop loss x ATR", 2.0, float, valid_range=(0.5, 10.0))
+    tp_str = ask("Take profit x ATR (blank for None)", "", str)
     cfg["tp"] = float(tp_str) if tp_str else None
 
-    cfg["side"] = ask("Trade side (choose): long_only / short_only / long_short", "long_short", str,
-                      choices=["long_only", "short_only", "long_short"])
+    cfg["side"] = ask(
+        "Trade side: long_only / short_only / long_short",
+        "long_short",
+        str,
+        choices=["long_only", "short_only", "long_short"]
+    )
 
-    cfg["execution"] = ask("Execution mode (choose): next_open / next_close", "next_open", str,
-                           choices=["next_open", "next_close"])
+    cfg["execution"] = ask(
+        "Execution: next_open / next_close",
+        "next_open",
+        str,
+        choices=["next_open", "next_close"]
+    )
 
     print("\n--- COST SETTINGS ---")
-    cfg["fee_bps"] = ask("Transaction cost per side in bps (0–50 typical, 1bps=0.01%)", 1.0, float, valid_range=(0, 100))
-    cfg["slip_bps"] = ask("Slippage per side in bps (0–50 typical)", 2.0, float, valid_range=(0, 100))
+    cfg["fee_bps"] = ask("Fees per side bps", 1.0, float, valid_range=(0, 100))
+    cfg["slip_bps"] = ask("Slippage per side bps", 2.0, float, valid_range=(0, 100))
 
     print("\n--- MISC SETTINGS ---")
-    cfg["warmup"] = ask("Warmup bars (0=auto, typical 20–100)", 0, int, valid_range=(0, 300)) or None
+    cfg["warmup"] = ask("Warmup bars (0=auto)", 0, int, valid_range=(0, 300)) or None
     cfg["outdir"] = ask("Output folder name", "out", str)
     print()
     return cfg
@@ -74,9 +98,12 @@ def parse_args():
     ap.add_argument("--period", default=None)
     ap.add_argument("--start", default=None)
     ap.add_argument("--end", default=None)
+    ap.add_argument("--interval", default="1d",
+                    choices=["1m","2m","5m","15m","30m","1h","1d","1wk","1mo"])
     ap.add_argument("--ema", type=int, default=20)
     ap.add_argument("--atr", type=int, default=10)
     ap.add_argument("--mult", type=float, default=2.0)
+    ap.add_argument("--strategy", choices=["momentum","mean_reversion","percentb","pullback","regime_switch"], default="momentum")
     ap.add_argument("--risk", type=float, default=0.01)
     ap.add_argument("--stop", type=float, default=2.0)
     ap.add_argument("--tp", type=float, default=None)
@@ -95,14 +122,31 @@ def main():
         cfg = interactive_inputs()
     else:
         cfg = vars(args)
+        lim = interval_limit(cfg["interval"])
+        print(f"[info] Interval {cfg['interval']} max lookback {lim['period_hint']}  {lim['note']}")
         if not cfg["warmup"]:
             cfg["warmup"] = max(cfg["ema"], cfg["atr"])
 
     os.makedirs(cfg["outdir"], exist_ok=True)
 
-    df = fetch_ohlc(cfg["ticker"], start=cfg["start"], end=cfg["end"], period=cfg["period"])
+    df = fetch_ohlc(
+        cfg["ticker"],
+        start=cfg["start"],
+        end=cfg["end"],
+        period=cfg["period"],
+        interval=cfg["interval"]
+    )
     kc = keltner_channel(df, ema_len=cfg["ema"], atr_len=cfg["atr"], mult=cfg["mult"])
-    sig = breakout_signals(kc)
+
+    sig_kwargs = {}
+    if cfg["strategy"] == "percentb":
+        sig_kwargs = {"low": 0.20, "high": 0.80}
+    if cfg["strategy"] == "pullback":
+        sig_kwargs = {"slope_len": 20}
+    if cfg["strategy"] == "regime_switch":
+        sig_kwargs = {"slope_len": 20, "strong_mult": 1.0}
+
+    sig = keltner_signals(kc, mode=cfg["strategy"], **sig_kwargs)
 
     bt = BTParams(
         execution=cfg["execution"],
