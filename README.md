@@ -2,10 +2,7 @@
 
 ---
 
-A complete Python project with a **Tkinter-based GUI** and a **Streamlit-based Web App** that calculates, visualizes, and backtests the **Keltner Channel** — a volatility-based technical indicator used by traders to identify trends, breakouts, and reversals.
-
-You can interact through sliders, dropdowns, and inputs in both desktop and web versions.
-It fetches live data from Yahoo Finance, runs a backtest, computes performance metrics, shows interactive charts, and saves all results automatically — including PDF reports and CSV exports.
+A complete and production-level **Python project** that unites a **Tkinter Desktop GUI** and a **Streamlit Web App** to analyze, visualize, and backtest the **Keltner Channel** indicator, a dynamic trading tool based on volatility and trend strength.
 
 ---
 
@@ -13,19 +10,21 @@ It fetches live data from Yahoo Finance, runs a backtest, computes performance m
 
 ---
 
-The **Keltner Channel** is a volatility envelope consisting of three lines around price:
+The **Keltner Channel (KC)** is a volatility-based indicator consisting of three dynamic lines derived from **EMA** and **ATR**. It adapts to price volatility and helps identify **breakouts**, **trend strength**, and **reversals**.
 
-1. **Middle Line (EMA)** – Exponential Moving Average of the closing price
-2. **Upper Band** – EMA + (Average True Range × Multiplier)
-3. **Lower Band** – EMA - (Average True Range × Multiplier)
+**Formulas:**
+
+* **Middle Line (Base):** EMA(Close, n)
+* **Upper Band:** EMA + (ATR × Multiplier)
+* **Lower Band:** EMA − (ATR × Multiplier)
 
 **Interpretation:**
 
-* Price above the upper band → bullish breakout or strong momentum
-* Price below the lower band → bearish breakdown
-* Price within the bands → consolidation or low volatility phase
+* **Price > Upper Band:** Uptrend or bullish breakout
+* **Price < Lower Band:** Downtrend or bearish breakdown
+* **Price inside bands:** Range-bound or consolidation
 
-Traders use the Keltner Channel to identify trend direction, capture breakouts, and set dynamic stop-loss and take-profit levels that scale with volatility.
+The Keltner Channel dynamically widens or contracts based on market volatility, making it ideal for **trend continuation** or **mean-reversion strategies**.
 
 ---
 
@@ -33,223 +32,279 @@ Traders use the Keltner Channel to identify trend direction, capture breakouts, 
 
 ---
 
-The application automates:
+This system automatically performs:
 
-1. **Data Fetching** – Downloads OHLC data from Yahoo Finance
+1. **Data Fetching** – Downloads historical OHLC data from Yahoo Finance
 2. **Indicator Computation** – Calculates EMA, ATR, and Keltner Channel
-3. **Signal Generation** – Detects entry and exit breakouts
-4. **Backtesting** – Simulates trades with risk control, slippage, and fees
-5. **Performance Metrics** – Calculates CAGR, Sharpe, Sortino, Max Drawdown, Exposure, etc.
-6. **Visualization** – Displays price, equity, and drawdown charts
-7. **Export** – Saves metrics, CSVs, PNGs, and PDFs (inputs, metrics, and charts)
+3. **Signal Generation** – Generates long/short entries and exits
+4. **Backtesting** – Simulates trades with capital, stop-loss, and take-profit logic
+5. **Performance Metrics** – Calculates advanced return and risk indicators
+6. **Visualization** – Displays charts (Price, Equity, Drawdown)
+7. **Export** – Saves CSV, JSON, PNG, and PDF reports automatically
 
 ---
 
-## KEY FEATURES
+## FEATURES SUMMARY
 
 ---
 
-### GUI (Tkinter)
+### DESKTOP GUI (Tkinter)
 
-* User-friendly **desktop GUI**
-* **Ticker input** box with validation
-* **Sliders** for EMA, ATR, multiplier, risk, stop × ATR, and optional take-profit × ATR
-* **Dropdowns** for side (`long_only`, `short_only`, `long_short`) and execution (`next_open`, `next_close`)
-* **Folder chooser** for saving outputs
-* Embedded **Matplotlib** charts (Price, Equity, Drawdown)
-* **Live metrics** panel with CAGR, Sharpe, Sortino, MaxDD, Exposure, Trades count
-* Automatic **per-ticker subfolders** and run logging
-
----
+* Slider-based controls for indicator and strategy parameters
+* Dynamic charts using Matplotlib (Price, Equity, Drawdown)
+* File chooser for output directory
+* Instant metric summaries
+* Auto run-logging (`runs_log.csv` per ticker)
+* PDF export with parameters, metrics, and visuals
 
 ### WEB APP (Streamlit)
 
-* **Fully synced sliders and numeric inputs**
-* **Interactive dashboards** using Plotly:
-
-  * OHLC with Keltner Channels and trade markers
-  * Equity and drawdown charts
-* **Tabs:**
-
-  * *Backtest* – Metrics and live charts
-  * *KC CSV* – View full Keltner Channel data table
-  * *Trades Explorer* – Filterable trade history, R histogram
-  * *Run History* – Aggregates `runs_log.csv` from each ticker folder
-  * *Report Builder* – Download PDF with parameters, metrics, and charts
-* **Auto folder creation per ticker** under the root directory
-* Each ticker has its own `runs_log.csv`
-* Downloadable **CSV**, **PDF**, and **summary files**
+* Modern web dashboard interface
+* Real-time Plotly visualizations (interactive, zoomable)
+* Interval-based period restriction per Yahoo data limits
+* Multi-tab design for Backtest, Trades, History, and Reports
+* Downloadable CSVs, charts, and PDF reports
+* Auto folder organization by ticker
 
 ---
 
-## HOW TO SET UP
+## STRATEGIES SUPPORTED
 
 ---
 
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/DebugDatta/Keltner-Channel-Indicator.git
-   ```
-
-2. **Enter the folder:**
-
-   ```bash
-   cd Keltner-Channel-Indicator
-   ```
-
-3. **Create and activate a virtual environment:**
-
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate     # Windows
-   source venv/bin/activate  # macOS/Linux
-   ```
-
-4. **Install dependencies:**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-   *(If tkinter isn’t installed, install it manually)*
+1. **Momentum Breakout:** Buys break above upper KC, sells below lower KC.
+2. **Mean Reversion:** Buys near lower KC, sells near upper KC.
+3. **PercentB Strategy:** Enters based on normalized band position (0–1).
+4. **Pullback Strategy:** Enters on retracement within a strong trend.
+5. **Regime Switch:** Switches between long/short modes based on KC slope.
 
 ---
 
-## HOW TO RUN (GUI MODE)
+## INTERVAL AND PERIOD COMPATIBILITY
+
+| Interval | Max Lookback | Typical Periods                      |
+| -------- | ------------ | ------------------------------------ |
+| 1m       | ~7 days      | 1d, 2d, 3d, 5d, 7d                   |
+| 2m–30m   | ~60 days     | 5d, 10d, 15d, 30d, 60d               |
+| 1h       | ~2 years     | 1mo, 3mo, 6mo, 1y, 2y                |
+| 1d       | ~50 years    | 1mo, 3mo, 6mo, 1y, 5y, 10y, ytd, max |
+| 1wk      | ~50 years    | 3mo, 6mo, 1y, 5y, 10y, ytd, max      |
+| 1mo      | ~50 years    | 1y, 2y, 3y, 5y, 10y, max             |
+
+The app automatically filters available **periods** based on selected **intervals**, ensuring compatibility with Yahoo Finance limits.
 
 ---
+
+## FULL TECHNICAL TERM EXPLANATION
+
+---
+
+Below is a detailed glossary of every key technical term used in this system.
+
+### 1. **OHLC (Open, High, Low, Close)**
+
+Standard price data structure.
+
+* **Open:** First traded price of the time interval
+* **High:** Highest price reached
+* **Low:** Lowest price reached
+* **Close:** Final traded price of the interval
+
+### 2. **EMA (Exponential Moving Average)**
+
+A weighted average of closing prices giving more importance to recent data.
+Faster to react than a simple moving average (SMA), making it ideal for trend detection.
+
+**Formula:**
+`EMA = (Close_today × α) + EMA_yesterday × (1 - α)`
+where `α = 2 / (N + 1)`
+
+### 3. **ATR (Average True Range)**
+
+Measures volatility.
+It computes the average range (High - Low) over N periods, accounting for gaps.
+
+**Formula:**
+`TR = max(High - Low, abs(High - PrevClose), abs(Low - PrevClose))`
+`ATR = EMA(TR, N)`
+
+### 4. **Keltner Channel (KC)**
+
+A volatility envelope based on EMA and ATR.
+Expands and contracts dynamically to reflect volatility changes.
+
+* **Upper Band:** EMA + ATR × Multiplier
+* **Lower Band:** EMA − ATR × Multiplier
+
+### 5. **Breakout**
+
+Price crossing above or below the KC bands.
+Indicates potential start of new trend or strong momentum burst.
+
+### 6. **Mean Reversion**
+
+The concept that prices revert back to their average value after deviation.
+KC helps spot overbought or oversold zones.
+
+### 7. **Pullback**
+
+Temporary counter-trend move inside a larger trend, often an ideal entry point.
+
+### 8. **Regime Detection**
+
+Identifies whether the market is trending or ranging based on slope of KC midline.
+
+### 9. **Risk per Trade (%)**
+
+The fraction of total capital risked in a single trade.
+E.g., 1% risk means a stop-loss is sized so the loss equals 1% of total equity.
+
+### 10. **Stop × ATR**
+
+A volatility-adjusted stop-loss distance.
+E.g., ATR=2.5, Multiplier=2 → Stop = 5 points below/above entry.
+
+### 11. **Take-Profit × ATR**
+
+Target level based on multiples of ATR for consistent reward-to-risk ratios.
+
+### 12. **Fee (bps)**
+
+Cost per transaction, in basis points.
+1 basis point (bps) = 0.01% = 0.0001 in decimal form.
+
+### 13. **Slippage**
+
+Difference between intended trade price and actual execution price due to market movement or low liquidity.
+
+### 14. **Equity Curve**
+
+Graph showing total account value across time during the backtest.
+
+### 15. **Drawdown**
+
+The decline from a peak to a trough in portfolio value.
+Expressed as a percentage of the peak.
+
+**Max Drawdown** = Largest historical drawdown observed.
+
+### 16. **Exposure**
+
+The percentage of time your strategy holds active positions.
+
+**Formula:**
+`Exposure = (Total time in trades) / (Total backtest duration)`
+
+### 17. **CAGR (Compound Annual Growth Rate)**
+
+The mean annual growth rate of portfolio over the test period.
+
+**Formula:**
+`CAGR = (Final Equity / Initial Equity)^(1 / Years) - 1`
+
+### 18. **Sharpe Ratio**
+
+Measures risk-adjusted return using volatility.
+
+**Formula:**
+`Sharpe = (Mean(Returns) - RiskFreeRate) / StdDev(Returns)`
+
+Higher = better risk efficiency.
+
+### 19. **Sortino Ratio**
+
+Similar to Sharpe but penalizes only **downside volatility** (bad risk).
+
+**Formula:**
+`Sortino = (Mean(Returns) - RiskFreeRate) / DownsideDeviation(Returns)`
+
+### 20. **R-Multiple**
+
+Profit or loss normalized by the initial risk per trade.
+
+**Formula:**
+`R = (Profit per trade) / (Initial risk)`
+
+### 21. **Trade Log**
+
+CSV file recording each trade’s entry, exit, side, PnL, duration, and R multiple.
+
+### 22. **Backtest**
+
+Simulation of strategy performance using historical data to validate profitability and robustness.
+
+### 23. **PDF Report**
+
+Automatically generated document summarizing parameters, metrics, and charts for documentation.
+
+### 24. **Exposure Time**
+
+Fraction of time portfolio capital is at risk or in open trades.
+
+### 25. **Volatility Expansion / Contraction**
+
+KC bands widen in high volatility (ATR up) and narrow in calm markets (ATR down), signaling breakout readiness.
+
+---
+
+## HOW TO RUN
+
+**GUI:**
 
 ```bash
 python gui_app.py
 ```
 
-Steps inside GUI:
+**Web:**
 
-1. Enter a ticker (e.g., `AAPL`, `RELIANCE.NS`, `BTC-USD`)
-2. Choose a period or date range
-3. Adjust EMA, ATR, Multiplier, Risk %, Stop × ATR, and optionally Take-Profit × ATR
-4. Pick Side (`long_only`, `short_only`, `long_short`) and Execution (`next_open`, `next_close`)
-5. Click **Choose Folder** to select save location
-6. Click **Run Backtest**
+```bash
+streamlit run app.py
+```
 
-The app will download data, backtest, display metrics and charts, and save results:
+Each mode supports all intervals and automatically adjusts period limits to Yahoo’s retention boundaries.
+
+---
+
+## OUTPUTS GENERATED
+
+Each run creates a structured folder:
 
 ```
-<output_root>/
-└── <ticker>/
+runs/
+└── AAPL/
     ├── runs_log.csv
-    ├── <ticker>_<timestamp>_kc.csv
-    ├── <ticker>_<timestamp>_trades.csv
-    ├── <ticker>_<timestamp>_kc.png
-    ├── <ticker>_<timestamp>_equity.png
-    ├── <ticker>_<timestamp>_drawdown.png
-    ├── <ticker>_<timestamp>_params.json
-    ├── <ticker>_<timestamp>_metrics.json
-    ├── <ticker>_<timestamp>_metrics.csv
-    ├── <ticker>_<timestamp>_report.pdf
-    └── <ticker>_<timestamp>_summary.txt
+    ├── AAPL_20251103_141200_kc.csv
+    ├── AAPL_20251103_141200_trades.csv
+    ├── AAPL_20251103_141200_metrics.json
+    ├── AAPL_20251103_141200_metrics.csv
+    ├── AAPL_20251103_141200_report.pdf
+    ├── AAPL_20251103_141200_equity.png
+    ├── AAPL_20251103_141200_drawdown.png
+    ├── AAPL_20251103_141200_kc.png
+    └── AAPL_20251103_141200_summary.txt
 ```
-
----
-
-## HOW TO RUN (WEB APP MODE)
-
----
-
-1. **Start the Streamlit app:**
-
-   ```bash
-   streamlit run app.py
-   ```
-
-2. **Open in browser:**
-
-   ```
-   http://localhost:8501
-   ```
-
-3. **Optional LAN sharing:**
-
-   ```bash
-   streamlit run app.py --server.address 0.0.0.0 --server.port 8501
-   ```
-
-Use the sidebar to configure inputs, run tests, and view all results interactively.
-Each run is stored in a **subfolder for that ticker** inside your chosen root folder.
-
----
-
-## OUTPUT STRUCTURE
-
----
-
-Each ticker’s run produces:
-
-```
-<root>/
-└── <TICKER>/
-    ├── runs_log.csv
-    ├── <TICKER>_<timestamp>_kc.csv
-    ├── <TICKER>_<timestamp>_trades.csv
-    ├── <TICKER>_<timestamp>_metrics.json
-    ├── <TICKER>_<timestamp>_metrics.csv
-    ├── <TICKER>_<timestamp>_report.pdf
-    └── other PNG and TXT files
-```
-
-**Note:**
-`runs_log.csv` is now saved **inside each ticker folder** for versioned tracking.
-
----
-
-## TECHNICAL TERMS SIMPLIFIED
-
----
-
-* **EMA (Exponential Moving Average):** Weighted average that reacts faster to recent prices, used to detect trend direction.
-* **ATR (Average True Range):** Measures market volatility by averaging the range between daily highs and lows.
-* **KC (Keltner Channel):** Volatility bands built around EMA using ATR, helps identify breakouts and reversals.
-* **CAGR (Compound Annual Growth Rate):** Average yearly growth of portfolio value over the backtest period.
-* **Sharpe Ratio:** Risk-adjusted return showing how much excess return is earned per unit of volatility.
-* **Sortino Ratio:** Similar to Sharpe but considers only downside volatility as risk.
-* **Max DD (Maximum Drawdown):** Largest peak-to-trough portfolio loss, indicates worst historical dip.
-* **Risk % (Risk per Trade):** Portion of total capital allocated to one trade, controls position size.
-* **Stop × ATR (Stop-loss Multiplier):** Stop-loss distance scaled by market volatility (ATR).
-* **TP × ATR (Take-Profit Multiplier):** Profit target distance based on ATR multiples.
-* **Fee bps (Basis Points):** Trading cost where 1 bps = 0.01%, used for brokerage or exchange fees.
-* **Slippage:** Difference between expected and executed trade prices due to market movement.
-* **Exposure:** Percentage of total time the strategy remains invested in active trades.
-* **Equity Curve:** Graph showing portfolio value progression across time.
-* **Backtest:** Simulation of historical trades to measure past strategy performance.
 
 ---
 
 ## LIMITATIONS
 
----
-
-* Works on daily OHLC data
-* Single instrument per run
-* No dividend or corporate action adjustments
-* For educational and research use only
+* Single-symbol backtest per run
+* Dependent on Yahoo Finance data limits
+* No live-trade execution
+* Educational and research use only
 
 ---
 
-## FUTURE IMPROVEMENTS
+## FUTURE UPGRADES
 
----
-
-* Portfolio-level testing
-* Parameter optimization
-* Multi-asset batch comparison
-* Trend filters (e.g. SMA200 confirmation)
-* Enhanced dashboards and visual themes
+* Multi-symbol batch testing
+* Parameter optimization engine
+* Machine learning regime filters
+* Multi-timeframe aggregation
+* Cloud-based dashboard
 
 ---
 
 ## AUTHOR
-
----
 
 Developed by **Pramit Datta**
