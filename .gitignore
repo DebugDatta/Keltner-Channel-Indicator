@@ -144,6 +144,10 @@ ENV/
 env.bak/
 venv.bak/
 
+# Backtest runs output
+runs/
+out/
+
 # Spyder project settings
 .spyderproject
 .spyproject
