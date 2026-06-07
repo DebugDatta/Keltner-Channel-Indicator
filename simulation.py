@@ -54,7 +54,7 @@ def run_gbm_simulation(
             )
 
             kc = keltner_channel(sim_df, **kc_params)
-            sig = keltner_signals(kc, mode=sig_params.get("mode", "momentum"), **sig_params)
+            sig = keltner_signals(kc, **sig_params)
             res = run_backtest(kc, sig, bt_params)
 
             m = res["metrics"].copy()

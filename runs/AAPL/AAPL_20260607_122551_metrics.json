@@ -1,0 +1,16 @@
+{
+  "CAGR": 0.018150028030377685,
+  "Sharpe": 0.2968226005183082,
+  "Sortino": 0.17257276024242166,
+  "MaxDrawdown": -0.37143910331976704,
+  "Exposure": 0.28021248339973437,
+  "NumTrades": 10.0,
+  "Expectancy": 0.5557053804937652,
+  "AvgWinR": 1.6559253908221123,
+  "AvgLossR": 0.544514629834582,
+  "WinRate": 0.5,
+  "TradesPerYear": 3.3356164383561646,
+  "AvgDaysInTrade": 28.4,
+  "MaxConsecutiveWins": 2.0,
+  "MaxConsecutiveLosses": 3.0
+}

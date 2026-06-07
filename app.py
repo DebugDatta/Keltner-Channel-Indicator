@@ -558,8 +558,8 @@ with tabs[5]:
             st.plotly_chart(fig_dd, width='stretch')
 
             st.subheader("Sample Equity Paths")
-            paths_sample = result["paths"][:100].T
-            paths_df = pd.DataFrame(paths_sample, index=range(paths_sample.shape[0]), columns=pd.bdate_range("2015-01-01", periods=n_days_val))
+            paths_sample = result["paths"][:n_days_val, :100].T  # (100 paths, 2520 days)
+            paths_df = pd.DataFrame(paths_sample, index=range(100), columns=pd.bdate_range("2015-01-01", periods=n_days_val))
             sample_paths = paths_df.sample(min(20, 100), axis=0)
             fig_paths = go.Figure()
             for _, row in sample_paths.iterrows():
