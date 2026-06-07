@@ -11,7 +11,7 @@ import plotly.express as px
 from data import fetch_ohlc, interval_limit
 from indicators import keltner_channel
 from strategy import keltner_signals
-from backtester import run_backtest, BTParams
+from backtester import run_backtest, BTParams, run_buy_and_hold
 
 st.set_page_config(page_title="Keltner Backtester", layout="wide")
 
@@ -34,7 +34,7 @@ def safe_read_csv(path: str, parse_date_cols: tuple[str, ...] = ()) -> pd.DataFr
         return None
     for c in parse_date_cols:
         if c in df.columns:
-            df[c] = pd.to_datetime(df[c], errors="coerce")
+            df[c] = pd.to_datetime(df[c], errors="coerce", utc=True)
     return df
 
 def mpl_price(kc: pd.DataFrame, trades: pd.DataFrame, ticker: str) -> Figure:
@@ -222,7 +222,7 @@ with st.sidebar:
     else:
         period_opts = ["1mo","3mo","6mo","1y","2y","5y","10y","max"]
 
-    period = st.selectbox("Period", [""] + period_opts, index=0)
+    period = st.selectbox("Period", [""] + period_opts, index=8)
 
     c1, c2 = st.columns(2)
     with c1: start = st.text_input("Start YYYY-MM-DD", "")
@@ -242,6 +242,7 @@ with st.sidebar:
     ema_len   = dual("EMA", 5, 200, 20, 1, "%d", is_int=True)
     atr_len   = dual("ATR", 5, 100, 10, 1, "%d", is_int=True)
     mult      = dual("Multiplier", 1.0, 5.0, 2.0, 0.1, "%.1f")
+    trend_ema = dual("Trend EMA", 20, 500, 200, 10, "%d", is_int=True)
 
     pb_low = pb_high = None
     slope_len = strong_mult = None
@@ -257,16 +258,21 @@ with st.sidebar:
     stop_mult = dual("Stop x ATR", 0.5, 10.0, 2.0, 0.1, "%.1f")
     tp_enable = st.checkbox("Enable Take Profit x ATR", value=False)
     tp_mult   = dual("Take Profit x ATR", 0.5, 10.0, 4.0, 0.1, "%.1f") if tp_enable else None
+    ts_enable = st.checkbox("Enable Trailing Stop", value=False)
+    ts_atr_mult = dual("Trailing Stop x ATR", 0.5, 10.0, 2.5, 0.1, "%.1f") if ts_enable else 2.5
+    bh_enable = st.checkbox("Show Buy & Hold benchmark", value=False)
 
     st.markdown("Save location")
-    root_outdir = st.text_input("Save root folder", "runs")
+    root_outdir = st.text_input("Save root folder", "runs", key="root_outdir")
 
     st.markdown("Costs and Run")
+    capital = st.number_input("Capital ($)", 1000.0, 10000000.0, 100000.0, step=1000.0, format="%.0f")
+    max_lev = st.slider("Max Leverage", 1.0, 5.0, 1.0, step=0.25)
     fee_bps = st.number_input("Fee bps", 0.0, 50.0, 1.0, 0.1)
     slip_bps = st.number_input("Slip bps", 0.0, 100.0, 2.0, 0.1)
     warm_override = st.number_input("Warmup override bars", 0, 500, 0, 1)
 
-    run_btn = st.button("Run Backtest", use_container_width=True)
+    run_btn = st.button("Run Backtest", width='stretch')
 
 if period and (start or end):
     st.info("Period selected, start and end will be ignored.")
@@ -292,18 +298,23 @@ if run_btn:
     if strategy_mode == "pullback":
         sig_kwargs = {"slope_len": int(slope_len)}
     if strategy_mode == "regime_switch":
-        sig_kwargs = {"slope_len": int(slope_len), "strong_mult": float(strong_mult)}
+        sig_kwargs = {"slope_len": int(slope_len), "strong_mult": float(strong_mult), "trend_ema_len": int(trend_ema)}
+    if strategy_mode in ("momentum", "breakout", "trend"):
+        sig_kwargs = {"trend_ema_len": int(trend_ema)}
 
     sig = keltner_signals(kc, mode=strategy_mode, **sig_kwargs)
 
     warmup = int(warm_override) if warm_override > 0 else max(int(ema_len), int(atr_len))
     bt = BTParams(
-        execution=execution, initial_capital=100000.0, side=side,
+        execution=execution, initial_capital=float(capital), side=side,
         fee_bps=float(fee_bps), slip_bps=float(slip_bps), risk_per_trade=float(risk),
         atr_stop_mult=float(stop_mult), take_profit_mult=float(tp_mult) if tp_enable else None,
-        warmup_bars=warmup, max_leverage=1.0,
+        warmup_bars=warmup, max_leverage=float(max_lev),
+        trailing_stop=ts_enable,
+        trailing_atr_mult=float(ts_atr_mult) if ts_enable else 2.5,
     )
     res = run_backtest(kc, sig, bt)
+    bh_res = run_buy_and_hold(df, initial_capital=float(capital)) if bh_enable else None
     trades = res["trades"]; equity = res["equity"]; metrics = res["metrics"]
 
     kc_out = kc.copy(); kc_out[["long_entry","short_entry","long_exit","short_exit"]] = sig
@@ -319,7 +330,10 @@ if run_btn:
         "ema_len": int(ema_len), "atr_len": int(atr_len), "multiplier": float(mult),
         "risk_per_trade": float(risk), "atr_stop_mult": float(stop_mult),
         "take_profit_mult_enabled": tp_enable, "take_profit_mult": float(tp_mult) if tp_enable else None,
+        "trend_ema_len": int(trend_ema),
         "fee_bps": float(fee_bps), "slip_bps": float(slip_bps), "warmup_override": int(warmup),
+        "initial_capital": float(capital), "max_leverage": float(max_lev),
+        "trailing_stop": ts_enable, "trailing_atr_mult": float(ts_atr_mult) if ts_enable else None,
     }
     if strategy_mode == "percentb":
         params.update({"pb_low": float(pb_low), "pb_high": float(pb_high)})
@@ -335,10 +349,12 @@ if run_btn:
 
     f_price = mpl_price(kc, trades, ticker); f_eq = mpl_equity(equity, ticker); f_dd = mpl_drawdown(equity, ticker)
     state["last"] = {"run_dir": run_dir, "base": base, "kc": kc, "trades": trades, "equity": equity,
+                     "bh_equity": bh_res["equity"] if bh_res else None,
+                     "bh_metrics": bh_res["metrics"] if bh_res else None,
                      "params": params, "metrics": metrics_clean, "mpl": {"price": f_price, "equity": f_eq, "dd": f_dd}}
     st.success(f"Saved in: {run_dir}")
 
-tabs = st.tabs(["Backtest", "KC CSV", "Trades Explorer", "Run History", "Report Builder"])
+tabs = st.tabs(["Backtest", "KC CSV", "Trades Explorer", "Run History", "Report Builder", "GBM Simulation"])
 
 with tabs[0]:
     if state["last"] is None:
@@ -349,12 +365,16 @@ with tabs[0]:
         st.subheader("Metrics")
         st.write(f"CAGR {metrics['CAGR']:.2%} | Sharpe {metrics['Sharpe']:.2f} | Sortino {metrics['Sortino']:.2f}")
         st.write(f"MaxDD {metrics['MaxDrawdown']:.2%} | Exposure {metrics['Exposure']:.2%} | Trades {metrics['NumTrades']}")
+        st.write(f"Expectancy {metrics.get('Expectancy', 0):.3f}R | WinRate {metrics.get('WinRate', 0):.1%} | AvgWin {metrics.get('AvgWinR', 0):.2f}R | AvgLoss {metrics.get('AvgLossR', 0):.2f}R | PerYear {metrics.get('TradesPerYear', 0):.1f}")
+        if last.get("bh_equity") is not None:
+            bh_metrics = last["bh_metrics"]
+            st.write(f"--- B&H --- CAGR {bh_metrics['CAGR']:.2%} | Sharpe {bh_metrics['Sharpe']:.2f} | MaxDD {bh_metrics['MaxDrawdown']:.2%}")
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(plotly_price_ohlc(kc, trades, ticker), use_container_width=True)
-            st.plotly_chart(plotly_equity(equity, ticker), use_container_width=True)
+            st.plotly_chart(plotly_price_ohlc(kc, trades, ticker), width='stretch')
+            st.plotly_chart(plotly_equity(equity, ticker), width='stretch')
         with c2:
-            st.plotly_chart(plotly_dd(equity), use_container_width=True)
+            st.plotly_chart(plotly_dd(equity), width='stretch')
 
         run_dir = last["run_dir"]; base = last["base"]
         kc_csv = os.path.join(run_dir, f"{base}_kc.csv")
@@ -375,7 +395,7 @@ with tabs[1]:
             st.warning("KC CSV missing or empty.")
         else:
             st.subheader("Keltner Channel CSV")
-            st.dataframe(kdf, use_container_width=True, height=480)
+            st.dataframe(kdf, width='stretch', height=480)
 
 with tabs[2]:
     if state["last"] is None:
@@ -396,12 +416,12 @@ with tabs[2]:
             if "side" in tdf.columns: tdf = tdf[tdf["side"].isin(side_f)]
             if "R" in tdf.columns:    tdf = tdf[tdf["R"] >= min_rr]
             if "pnl" in tdf.columns:  tdf = tdf[(tdf["pnl"] >= min_p) & (tdf["pnl"] <= max_p)]
-            st.dataframe(tdf, use_container_width=True, height=420)
+            st.dataframe(tdf, width='stretch', height=420)
             if "R" in tdf.columns and len(tdf) > 0:
-                st.plotly_chart(px.histogram(tdf, x="R", nbins=30, title="Distribution of R multiples"), use_container_width=True)
+                st.plotly_chart(px.histogram(tdf, x="R", nbins=30, title="Distribution of R multiples"), width='stretch')
 
 with tabs[3]:
-    root = (st.session_state.get("root_outdir", "runs")).strip()
+    root = st.session_state.get("root_outdir", "runs").strip()
     dfhist = read_all_runs_logs(root)
     st.subheader("Run History")
     if dfhist.empty:
@@ -413,12 +433,12 @@ with tabs[3]:
             base_df = dfhist[dfhist["ticker"].astype(str).isin(t_sel)] if t_sel else dfhist
         else:
             base_df = dfhist[dfhist["ticker_folder"].astype(str).isin(t_sel)] if t_sel else dfhist
-        st.dataframe(base_df, use_container_width=True, height=480)
+        st.dataframe(base_df, width='stretch', height=480)
         if {"Sharpe","MaxDrawdown"}.issubset(base_df.columns):
             st.plotly_chart(px.scatter(base_df, x="MaxDrawdown", y="Sharpe",
                                        color=(base_df["ticker"] if "ticker" in base_df.columns else base_df["ticker_folder"]),
                                        hover_data=["base"] if "base" in base_df.columns else None,
-                                       title="Sharpe vs Max Drawdown"), use_container_width=True)
+                                       title="Sharpe vs Max Drawdown"), width='stretch')
 
 with tabs[4]:
     if state["last"] is None:
@@ -436,3 +456,113 @@ with tabs[4]:
             pdf_bytes = build_pdf(params, metrics, figs["price"], figs["equity"], figs["dd"],
                                   include_text=inc_text, include_price=inc_price, include_equity=inc_eq, include_dd=inc_dd)
             st.download_button("Download PDF", data=pdf_bytes, file_name=f"{last['base']}_report.pdf", mime="application/pdf")
+
+with tabs[5]:
+    st.subheader("GBM Monte Carlo Simulation")
+    st.markdown("Tests strategy robustness across 1,000+ synthetic price paths using Geometric Brownian Motion.")
+
+    sim_col1, sim_col2 = st.columns(2)
+    with sim_col1:
+        sim_mu = st.slider("Drift (mu)", -0.15, 0.15, 0.08, step=0.01, help="Annual drift. 0.08 = +8pct/yr bull market, -0.08 = -8pct/yr bear market, 0 = random walk")
+    with sim_col2:
+        sim_sigma = st.slider("Volatility (sigma)", 0.05, 0.50, 0.20, step=0.01, help="Annual volatility. 0.20 = 20pct annualized vol")
+
+    sim_col3, sim_col4 = st.columns(2)
+    with sim_col3:
+        sim_paths = st.slider("Number of paths", 100, 2000, 500, step=50, help="500 paths = ~60s, 1000 paths = ~2min")
+    with sim_col4:
+        sim_days = st.slider("Trading days", 252, 5040, 2520, step=252, help="1 year = 252 days, 10 years = 2520")
+
+    sim_strategy = st.selectbox("Simulate strategy", ["momentum", "mean_reversion", "percentb", "pullback", "regime_switch"], index=0)
+
+    if st.button("Run GBM Simulation", width='stretch'):
+        kc_params = {"ema_len": int(ema_len), "atr_len": int(atr_len), "mult": float(mult)}
+        sig_params = {"mode": sim_strategy}
+        if sim_strategy == "percentb":
+            sig_params["low"] = float(pb_low)
+            sig_params["high"] = float(pb_high)
+        elif sim_strategy in ("pullback", "regime_switch"):
+            sig_params["slope_len"] = int(slope_len) if slope_len else 20
+        elif sim_strategy in ("momentum", "breakout", "trend"):
+            sig_params["trend_ema_len"] = int(trend_ema)
+
+        bt_sim = BTParams(
+            execution="next_open", initial_capital=float(capital), side="long_only",
+            fee_bps=1.0, slip_bps=2.0, risk_per_trade=0.01,
+            atr_stop_mult=2.0, warmup_bars=20, max_leverage=1.0,
+        )
+
+        n_paths_val = int(sim_paths)
+        n_days_val = int(sim_days)
+        progress_bar = st.progress(0, text=f"Running 0/{n_paths_val} paths...")
+        status_text = st.empty()
+
+        def progress_callback(current, total):
+            progress_bar.progress(current / total)
+            if current % 50 == 0 or current == total:
+                status_text.text(f"Running path {current}/{total}...")
+
+        with st.spinner("Simulating GBM paths..."):
+            from simulation import run_gbm_simulation
+            result = run_gbm_simulation(
+                kc_params=kc_params,
+                bt_params=bt_sim,
+                sig_params=sig_params,
+                mu=float(sim_mu),
+                sigma=float(sim_sigma),
+                n_days=n_days_val,
+                n_paths=n_paths_val,
+                S0=100.0,
+                progress_callback=progress_callback,
+            )
+
+        progress_bar.empty()
+        status_text.empty()
+
+        n_failed = result.get("failed", 0)
+        if result["all_results"].empty:
+            st.error(f"Simulation failed — all {n_paths_val} paths errored. Check console for details.")
+        else:
+            n_succeeded = len(result["all_results"])
+            st.success(f"Completed {n_succeeded}/{n_paths_val} simulations across {n_days_val} trading days." + (f" ({n_failed} paths failed)" if n_failed > 0 else ""))
+            if n_failed > 0:
+                st.warning(f"{n_failed} paths failed due to NaN or errors — they are excluded from results.")
+
+            summary = result["summary"]
+            st.subheader("Distribution Results (Percentiles)")
+
+            pct_cols = ["p5", "p25", "p50", "p75", "p95", "mean", "std"]
+            metrics_display = ["CAGR", "Sharpe", "MaxDrawdown", "NumTrades", "Expectancy"]
+
+            for m in metrics_display:
+                if m in summary:
+                    row = {p: f"{summary[m][p]:.3f}" for p in pct_cols if p in summary[m]}
+                    st.write(f"**{m}**: {row}")
+
+            st.subheader("CAGR Distribution")
+            cagr_data = result["all_results"]["CAGR"].dropna()
+            fig_cagr = px.histogram(cagr_data, nbins=50, title="CAGR Distribution across Simulated Paths")
+            fig_cagr.update_layout(height=300)
+            st.plotly_chart(fig_cagr, width='stretch')
+
+            st.subheader("Sharpe Distribution")
+            sharpe_data = result["all_results"]["Sharpe"].dropna()
+            fig_sharpe = px.histogram(sharpe_data, nbins=50, title="Sharpe Ratio Distribution")
+            fig_sharpe.update_layout(height=300)
+            st.plotly_chart(fig_sharpe, width='stretch')
+
+            st.subheader("Max Drawdown Distribution")
+            dd_data = result["all_results"]["MaxDrawdown"].dropna()
+            fig_dd = px.histogram(dd_data, nbins=50, title="Max Drawdown Distribution")
+            fig_dd.update_layout(height=300)
+            st.plotly_chart(fig_dd, width='stretch')
+
+            st.subheader("Sample Equity Paths")
+            paths_sample = result["paths"][:100].T
+            paths_df = pd.DataFrame(paths_sample, index=range(paths_sample.shape[0]), columns=pd.bdate_range("2015-01-01", periods=n_days_val))
+            sample_paths = paths_df.sample(min(20, 100), axis=0)
+            fig_paths = go.Figure()
+            for _, row in sample_paths.iterrows():
+                fig_paths.add_trace(go.Scatter(y=row.values, mode="lines", opacity=0.4, showlegend=False))
+            fig_paths.update_layout(title="20 Sample Simulated Price Paths", height=300)
+            st.plotly_chart(fig_paths, width='stretch')

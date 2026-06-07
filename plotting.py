@@ -2,6 +2,8 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import pandas as pd
 
+__all__ = ["plot_price_kc", "plot_equity", "plot_drawdown"]
+
 def plot_price_kc(df: pd.DataFrame, ticker: str, out_png: str | None = None, trades: pd.DataFrame | None = None):
     plt.figure(figsize=(12,5))
     plt.plot(df.index, df["Close"], label="Close")
@@ -14,8 +16,8 @@ def plot_price_kc(df: pd.DataFrame, ticker: str, out_png: str | None = None, tra
         shorts = trades[trades["side"] == "short"]
         plt.scatter(longs["entry_time"], longs["entry_px"], marker="^", s=60, label="Long Entry")
         plt.scatter(longs["exit_time"], longs["exit_px"], marker="v", s=60, label="Long Exit")
-        plt.scatter(shorts["entry_time"], shorts["entry_px"], marker="v", s=60, label="Short Entry")
-        plt.scatter(shorts["exit_time"], shorts["exit_px"], marker="^", s=60, label="Short Exit")
+        plt.scatter(shorts["entry_time"], shorts["entry_px"], marker="^", s=60, label="Short Entry")
+        plt.scatter(shorts["exit_time"], shorts["exit_px"], marker="v", s=60, label="Short Exit")
 
     plt.title(f"{ticker} Keltner Channel")
     plt.xlabel("Date"); plt.ylabel("Price"); plt.legend(); plt.tight_layout()

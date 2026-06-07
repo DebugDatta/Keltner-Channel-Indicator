@@ -2,6 +2,8 @@ from __future__ import annotations
 import pandas as pd
 import yfinance as yf
 
+__all__ = ["fetch_ohlc", "interval_limit"]
+
 # Yahoo lookback limits per interval
 INTERVAL_LIMITS = {
     "1m":  {"max_days": 7,    "period_hint": "7d",   "note": "1m supports ~7 days"},
@@ -10,7 +12,6 @@ INTERVAL_LIMITS = {
     "15m": {"max_days": 60,   "period_hint": "60d",  "note": "15m supports ~60 days"},
     "30m": {"max_days": 730,  "period_hint": "730d", "note": "30m supports ~2 years"},
     "1h":  {"max_days": 730,  "period_hint": "730d", "note": "1h supports ~2 years"},
-    "90m": {"max_days": 60,   "period_hint": "60d",  "note": "90m supports ~60 days"},
     "1d":  {"max_days": None, "period_hint": "max",  "note": "1d supports decades"},
     "1wk": {"max_days": None, "period_hint": "max",  "note": "1wk supports decades"},
     "1mo": {"max_days": None, "period_hint": "max",  "note": "1mo supports decades"},

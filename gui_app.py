@@ -83,6 +83,7 @@ class KCBacktestApp(tk.Tk):
         self._slider(ctrl, r, 4, "Multiplier", 2.0, 1.0, 5.0, 0.1)
         self._slider(ctrl, r, 6, "Risk", 0.010, 0.001, 0.100, 0.001)
         self._slider(ctrl, r, 8, "Stop x ATR", 2.0, 0.5, 10.0, 0.1)
+        self._slider(ctrl, r, 10, "Trend EMA", 200, 20, 500, 10)
 
         ttk.Label(ctrl, text="TP x ATR").grid(row=r, column=10, sticky="w", padx=4)
         self.tp_enable = tk.BooleanVar(value=False)
@@ -101,6 +102,16 @@ class KCBacktestApp(tk.Tk):
         self._toggle_tp()
         r += 1
 
+        ttk.Label(ctrl, text="Trailing Stop").grid(row=r, column=0, sticky="w", padx=4, pady=4)
+        self.ts_enable = tk.BooleanVar(value=False)
+        self.cb_ts = ttk.Checkbutton(ctrl, variable=self.ts_enable, command=self._toggle_ts)
+        self.cb_ts.grid(row=r, column=1, sticky="w")
+        ttk.Label(ctrl, text="x ATR").grid(row=r, column=2, sticky="w", padx=2)
+        self.e_ts_mult = ttk.Entry(ctrl, width=6); self.e_ts_mult.insert(0, "2.5")
+        self.e_ts_mult.grid(row=r, column=3, sticky="we", padx=4)
+        self._toggle_ts()
+
+        r += 1
         ttk.Label(ctrl, text="Fee bps").grid(row=r, column=0, sticky="w", padx=4, pady=4)
         self.e_fee = ttk.Entry(ctrl, width=8); self.e_fee.insert(0, "1.0")
         self.e_fee.grid(row=r, column=1, sticky="we", padx=4)
@@ -121,6 +132,27 @@ class KCBacktestApp(tk.Tk):
             width=14, state="readonly"
         )
         self.dd_strategy.grid(row=r, column=7, sticky="we", padx=4, pady=4)
+        self.dd_strategy.bind("<<ComboboxSelected>>", lambda _e=None: self._update_strategy_controls())
+
+        r += 1
+        self.pb_frame = ttk.Frame(ctrl)
+        self.pb_frame.grid(row=r, column=0, columnspan=14, sticky="we", padx=4)
+        self.pb_frame.columnconfigure(1, weight=1)
+        ttk.Label(self.pb_frame, text="PercentB Low").grid(row=0, column=0, sticky="w")
+        self.e_pb_low = ttk.Entry(self.pb_frame, width=6); self.e_pb_low.insert(0, "0.20")
+        self.e_pb_low.grid(row=0, column=1, sticky="we", padx=4)
+        ttk.Label(self.pb_frame, text="High").grid(row=0, column=2, sticky="w", padx=(12,0))
+        self.e_pb_high = ttk.Entry(self.pb_frame, width=6); self.e_pb_high.insert(0, "0.80")
+        self.e_pb_high.grid(row=0, column=3, sticky="we", padx=4)
+        self._update_strategy_controls()
+
+        r += 1
+        ttk.Label(ctrl, text="Capital $").grid(row=r, column=0, sticky="w", padx=4, pady=4)
+        self.e_capital = ttk.Entry(ctrl, width=10); self.e_capital.insert(0, "100000")
+        self.e_capital.grid(row=r, column=1, sticky="we", padx=4)
+        ttk.Label(ctrl, text="Max Lev").grid(row=r, column=2, sticky="w", padx=4, pady=4)
+        self.e_max_lev = ttk.Entry(ctrl, width=6); self.e_max_lev.insert(0, "1.0")
+        self.e_max_lev.grid(row=r, column=3, sticky="we", padx=4)
 
         ttk.Label(ctrl, text="Save to").grid(row=r, column=8, sticky="w", padx=4, pady=4)
         self.e_outdir = ttk.Entry(ctrl, textvariable=self.outdir)
@@ -220,6 +252,16 @@ class KCBacktestApp(tk.Tk):
         else:
             self.tp_frame.grid_remove()
 
+    def _toggle_ts(self):
+        self.e_ts_mult.configure(state="normal" if self.ts_enable.get() else "disabled")
+
+    def _update_strategy_controls(self):
+        strategy = self.strategy.get()
+        if strategy == "percentb":
+            self.pb_frame.grid()
+        else:
+            self.pb_frame.grid_remove()
+
     def choose_outdir(self):
         path = filedialog.askdirectory(title="Select Output Folder")
         if path: self.outdir.set(path)
@@ -250,9 +292,16 @@ class KCBacktestApp(tk.Tk):
             "atr_stop_mult": float(self.s_Stop_x_ATR.get()),
             "take_profit_mult_enabled": self.tp_enable.get(),
             "take_profit_mult": float(self.tp_scale.get()) if self.tp_enable.get() else None,
+            "trend_ema_len": int(float(self.s_Trend_EMA.get())),
             "fee_bps": float(self.e_fee.get()),
             "slip_bps": float(self.e_slip.get()),
             "warmup_override": int(self.e_warm.get()),
+            "initial_capital": float(self.e_capital.get()),
+            "max_leverage": float(self.e_max_lev.get()),
+            "pb_low": float(self.e_pb_low.get()),
+            "pb_high": float(self.e_pb_high.get()),
+            "trailing_stop": self.ts_enable.get(),
+            "trailing_atr_mult": float(self.e_ts_mult.get()) if self.ts_enable.get() else None,
         }
 
     def _save_params_and_metrics(self, outdir, base, params, metrics):
@@ -262,7 +311,7 @@ class KCBacktestApp(tk.Tk):
         with open(metrics_path, "w", encoding="utf-8") as f: json.dump(metrics, f, indent=2)
         met_csv = os.path.join(outdir, f"{base}_metrics.csv")
         pd.DataFrame([metrics]).to_csv(met_csv, index=False)
-        registry_csv = os.path.join(os.path.dirname(outdir), "runs_log.csv") if os.path.basename(outdir) else os.path.join(outdir, "runs_log.csv")
+        registry_csv = os.path.join(os.path.dirname(outdir), "runs_log.csv")
         row = {**{"base": base}, **params, **metrics}
         df_row = pd.DataFrame([row])
         if os.path.exists(registry_csv):
@@ -300,29 +349,39 @@ class KCBacktestApp(tk.Tk):
         ema_len = int(float(self.s_EMA.get())); atr_len = int(float(self.s_ATR.get()))
         mult = float(self.s_Multiplier.get()); risk = float(self.s_Risk.get())
         stop_mult = float(self.s_Stop_x_ATR.get())
+        trend_ema = int(float(self.s_Trend_EMA.get()))
         tp = float(self.tp_scale.get()) if self.tp_enable.get() else None
         side = self.side.get(); execution = self.execution.get()
         strategy_mode = self.strategy.get()
         fee_bps = float(self.e_fee.get()); slip_bps = float(self.e_slip.get())
         warm = int(self.e_warm.get()); warmup = warm if warm > 0 else max(ema_len, atr_len)
+        capital = float(self.e_capital.get())
+        max_lev = float(self.e_max_lev.get())
+        pb_low = float(self.e_pb_low.get()); pb_high = float(self.e_pb_high.get())
+        trailing_stop = self.ts_enable.get()
+        trailing_atr_mult = float(self.e_ts_mult.get()) if self.ts_enable.get() else 2.5
 
         kc = keltner_channel(df, ema_len=ema_len, atr_len=atr_len, mult=mult)
 
         sig_kwargs = {}
         if strategy_mode == "percentb":
-            sig_kwargs = {"low": 0.20, "high": 0.80}
+            sig_kwargs = {"low": pb_low, "high": pb_high}
         if strategy_mode == "pullback":
             sig_kwargs = {"slope_len": 20}
         if strategy_mode == "regime_switch":
-            sig_kwargs = {"slope_len": 20, "strong_mult": 1.0}
+            sig_kwargs = {"slope_len": 20, "strong_mult": 1.0, "trend_ema_len": trend_ema}
+        if strategy_mode in ("momentum", "breakout", "trend"):
+            sig_kwargs = {"trend_ema_len": trend_ema}
 
         sig = keltner_signals(kc, mode=strategy_mode, **sig_kwargs)
 
         bt = BTParams(
-            execution=execution, initial_capital=100000.0, side=side,
+            execution=execution, initial_capital=capital, side=side,
             fee_bps=fee_bps, slip_bps=slip_bps, risk_per_trade=risk,
             atr_stop_mult=stop_mult, take_profit_mult=tp,
-            warmup_bars=warmup, max_leverage=1.0,
+            warmup_bars=warmup, max_leverage=max_lev,
+            trailing_stop=trailing_stop,
+            trailing_atr_mult=trailing_atr_mult,
         )
         res = run_backtest(kc, sig, bt)
         base = f"{ticker}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -335,6 +394,9 @@ class KCBacktestApp(tk.Tk):
             f"CAGR {met['CAGR']:.2%}  |  Sharpe {met['Sharpe']:.2f}  |  "
             f"Sortino {met['Sortino']:.2f}  |  MaxDD {met['MaxDrawdown']:.2%}  |  "
             f"Exposure {met['Exposure']:.2%}  |  Trades {met['NumTrades']}\n"
+            f"Expectancy {met.get('Expectancy', 0):.3f}R  |  WinRate {met.get('WinRate', 0):.1%}  |  "
+            f"AvgWin {met.get('AvgWinR', 0):.2f}R  |  AvgLoss {met.get('AvgLossR', 0):.2f}R  |  "
+            f"PerYear {met.get('TradesPerYear', 0):.1f}\n"
             f"Saved to: {run_dir}"
         )
         self.metrics_text.delete("1.0", "end"); self.metrics_text.insert("end", txt)

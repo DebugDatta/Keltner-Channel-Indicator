@@ -87,7 +87,8 @@ This system automatically performs
 
 ### DESKTOP GUI (Tkinter)
 
-* Slider based controls for indicator and strategy parameters
+* Slider based controls for all indicator and strategy parameters
+* Capital, leverage, trend EMA, and PercentB threshold inputs
 * Dynamic charts using Matplotlib (Price, Equity, Drawdown)
 * File chooser for output directory
 * Instant metric summaries
@@ -98,8 +99,11 @@ This system automatically performs
 
 * Modern web dashboard interface
 * Real time Plotly visualizations (interactive and zoomable)
+* Capital, leverage, trend EMA, trailing stop, and PercentB threshold controls
+* Buy & Hold benchmark comparison
 * Interval based period restriction per Yahoo data limits
-* Multi tab design for Backtest, Trades, History, and Reports
+* Multi tab design: Backtest, KC CSV, Trades Explorer, Run History, Report Builder, GBM Simulation
+* GBM Monte Carlo simulation with distribution histograms and percentile tables
 * Downloadable CSVs, charts, and reports
 * Auto folder organization by ticker
 
@@ -166,6 +170,34 @@ This system automatically performs
 | 1mo      | ~50 years    | 1y, 2y, 3y, 5y, 10y, max             |
 
 The app filters available **periods** based on selected **intervals** to match Yahoo Finance limits.
+
+---
+
+## PARAMETER REFERENCE
+
+All user-adjustable parameters and their valid ranges:
+
+| Parameter | GUI Control | CLI Argument | Min | Max | Default |
+|-----------|-------------|--------------|-----|-----|---------|
+| Initial Capital | Entry ($) | `--capital` | 1,000 | 10,000,000 | 100,000 |
+| Max Leverage | Entry | `--max-leverage` | 1.0 | 5.0 | 1.0 |
+| EMA Length | Slider | `--ema` | 5 | 200 | 20 |
+| ATR Length | Slider | `--atr` | 5 | 100 | 10 |
+| Band Multiplier | Slider | `--mult` | 1.0 | 5.0 | 2.0 |
+| Risk per Trade | Slider | `--risk` | 0.001 | 0.100 | 0.010 |
+| Stop × ATR | Slider | `--stop` | 0.5 | 10.0 | 2.0 |
+| Take Profit × ATR | Checkbox + Slider | `--tp` | 0.5 | 10.0 | 4.0 |
+| Trailing Stop | Checkbox | `--trailing-stop` | — | boolean | False |
+| Trailing × ATR | Entry | `--trailing-atr-mult` | 0.5 | 10.0 | 2.5 |
+| Trend EMA | Slider | `--trend-ema` | 20 | 500 | 200 |
+| PercentB Low | Entry | `--pb-low` | 0.00 | 0.50 | 0.20 |
+| PercentB High | Entry | `--pb-high` | 0.50 | 1.00 | 0.80 |
+| Fee (bps) | Entry | `--fee_bps` | 0 | 50 | 1.0 |
+| Slippage (bps) | Entry | `--slip_bps` | 0 | 100 | 2.0 |
+| Warmup Bars | Entry | `--warmup` | 0 | 500 | auto |
+| Side | Combobox | `--side` | — | long_only/short_only/long_short | long_short |
+| Execution | Combobox | `--execution` | — | next_open/next_close | next_open |
+| Buy & Hold | Checkbox | `--bh` | — | boolean | False |
 
 ---
 
@@ -318,7 +350,51 @@ python gui_app.py
 streamlit run app.py
 ```
 
+**CLI (command line)**
+
+```bash
+python run_backtest.py --ticker AAPL --period 5y --strategy momentum --capital 100000 --max-leverage 2.0 --trend-ema 200
+```
+
+**CLI (interactive mode)**
+
+```bash
+python run_backtest.py --interactive
+```
+
 Both modes support all intervals and automatically adjust period limits to Yahoo retention boundaries.
+
+### CLI Arguments
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--ticker` | Ticker symbol | *(required unless --interactive)* |
+| `--period` | Yahoo period (1mo,3mo,6mo,1y,2y,5y,10y,max) | 5y |
+| `--start` | Start date YYYY-MM-DD | None |
+| `--end` | End date YYYY-MM-DD | None |
+| `--interval` | Data interval (1m,2m,5m,15m,30m,1h,1d,1wk,1mo) | 1d |
+| `--ema` | EMA length for KC middle | 20 |
+| `--atr` | ATR length | 10 |
+| `--mult` | ATR multiplier for bands | 2.0 |
+| `--strategy` | Strategy mode | momentum |
+| `--risk` | Risk per trade fraction | 0.01 |
+| `--stop` | Stop loss × ATR | 2.0 |
+| `--tp` | Take profit × ATR | None |
+| `--side` | long_only / short_only / long_short | long_short |
+| `--execution` | next_open / next_close | next_open |
+| `--fee_bps` | Fee per side in bps | 1.0 |
+| `--slip_bps` | Slippage per side in bps | 2.0 |
+| `--warmup` | Warmup bars override | auto |
+| `--capital` | Initial capital ($) | 100000 |
+| `--max-leverage` | Maximum leverage | 1.0 |
+| `--pb-low` | PercentB low threshold | 0.20 |
+| `--pb-high` | PercentB high threshold | 0.80 |
+| `--trend-ema` | Trend EMA length for momentum/regime strategies | 200 |
+| `--trailing-stop` | Enable trailing stop exit | False |
+| `--trailing-atr-mult` | Trailing stop ATR multiplier | 2.5 |
+| `--bh` | Run Buy & Hold benchmark alongside backtest | False |
+| `--outdir` | Output directory | out |
+| `--interactive` | Run interactive prompt mode | False |
 
 ---
 
@@ -334,11 +410,14 @@ runs/
     ├── AAPL_20251103_141200_trades.csv
     ├── AAPL_20251103_141200_metrics.json
     ├── AAPL_20251103_141200_metrics.csv
+    ├── AAPL_20251103_141200_params.json
     ├── AAPL_20251103_141200_equity.png
     ├── AAPL_20251103_141200_drawdown.png
     ├── AAPL_20251103_141200_kc.png
     └── AAPL_20251103_141200_summary.txt
 ```
+
+`runs_log.csv` in the parent `runs/` folder aggregates all historical runs for all tickers, useful for the **Run History** tab in the web app.
 
 ---
 
@@ -351,13 +430,40 @@ runs/
 
 ---
 
+## CHANGELOG
+
+### v3.0 — Advanced Analytics & Simulation
+- Added **R-Multiple** per trade: `initial_risk` and `r_multiple` columns in trades CSV
+- Added **Expectancy** metric: `Expectancy = WinRate × AvgWinR − LossRate × AvgLossR`
+- Added **signal frequency stats**: TradesPerYear, AvgDaysInTrade, MaxConsecutiveWins, MaxConsecutiveLosses
+- Added **Trailing Stop** mechanism: `--trailing-stop` + `--trailing-atr-mult`; exits when price retraces by ATR multiple after new highs/lows
+- Added **Buy & Hold benchmark**: `--bh` flag; runs B&H alongside backtest and prints comparison metrics
+- Added **GBM Monte Carlo Simulation**: `simulation.py` module; runs strategy across 100–5,000 synthetic GBM price paths; shows percentile distributions (p5/p25/p50/p75/p95) for CAGR, Sharpe, MaxDD, Expectancy; includes distribution histograms and sample path visualization
+- New **GBM Simulation tab** in Streamlit web app
+
+### v2.0 — User Input Expansions
+- Added `initial_capital` and `max_leverage` as user-configurable parameters across all interfaces
+- Added `trend_ema_len` parameter (configurable Trend EMA) for momentum and regime_switch strategies
+- Added `pb_low` / `pb_high` PercentB threshold parameters for the percentb strategy
+- Added `--interactive` CLI mode with guided prompts
+- Fixed equity curve to update mark-to-market every bar instead of only at trade exits
+- Fixed short entry/exit marker swap in plotting
+- Fixed Keltner Channel middle line to use Close price instead of Typical Price
+- Removed invalid `90m` interval from interval limits
+- Added `__all__` exports to all modules for clean public API
+- Added comprehensive CLI argument reference to README
+
+---
+
 ## FUTURE UPGRADES
 
 * Multi symbol batch testing
-* Parameter optimization engine
+* Parameter optimization engine (grid search over EMA/ATR/mult combinations)
 * Machine learning regime filters
 * Multi timeframe aggregation
 * Cloud based dashboard
+* Automated PDF report emailed on completion
+* Combined equity curve (strategy vs B&H) on single chart
 
 ---
 

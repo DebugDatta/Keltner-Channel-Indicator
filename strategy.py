@@ -1,14 +1,15 @@
 from __future__ import annotations
 import pandas as pd
 
+__all__ = ["breakout_signals", "mean_reversion_signals", "percentb_signals", "pullback_signals", "regime_switch_signals", "keltner_signals"]
 
-def breakout_signals(df: pd.DataFrame, prefix: str = "KC_") -> pd.DataFrame:
+def breakout_signals(df: pd.DataFrame, prefix: str = "KC_", trend_ema_len: int = 200) -> pd.DataFrame:
     u, l, m = df[f"{prefix}Upper"], df[f"{prefix}Lower"], df[f"{prefix}Middle"]
     c = df["Close"]
-    ema200 = c.ewm(span=200, adjust=False, min_periods=200).mean()
+    ema_trend = c.ewm(span=trend_ema_len, adjust=False, min_periods=trend_ema_len).mean()
 
-    long_entry = (c.shift(1) <= u.shift(1)) & (c > u) & (c > ema200)
-    short_entry = (c.shift(1) >= l.shift(1)) & (c < l) & (c < ema200)
+    long_entry = (c.shift(1) <= u.shift(1)) & (c > u) & (c > ema_trend)
+    short_entry = (c.shift(1) >= l.shift(1)) & (c < l) & (c < ema_trend)
 
     long_exit = (c.shift(1) >= m.shift(1)) & (c < m)
     short_exit = (c.shift(1) <= m.shift(1)) & (c > m)
@@ -92,14 +93,15 @@ def regime_switch_signals(
     df: pd.DataFrame,
     slope_len: int = 20,
     strong_mult: float = 1.0,
-    prefix: str = "KC_"
+    prefix: str = "KC_",
+    trend_ema_len: int = 200
 ) -> pd.DataFrame:
     m = df[f"{prefix}Middle"]
-    slope = m.diff(slope_len)
+    diff = m.diff(slope_len)
     ref = m.rolling(100, min_periods=50).std()
-    strong = (slope.abs() > strong_mult * ref).fillna(False)
+    strong = (diff.abs() > strong_mult * ref).fillna(False)
 
-    sig_trend = breakout_signals(df, prefix=prefix)
+    sig_trend = breakout_signals(df, prefix=prefix, trend_ema_len=trend_ema_len)
     sig_revert = mean_reversion_signals(df, prefix=prefix)
 
     out = pd.DataFrame(index=df.index)
@@ -119,7 +121,7 @@ def keltner_signals(
 ) -> pd.DataFrame:
     m = (mode or "momentum").strip().lower()
     if m in ("momentum", "breakout", "trend"):
-        return breakout_signals(df, prefix=prefix)
+        return breakout_signals(df, prefix=prefix, trend_ema_len=kwargs.get("trend_ema_len", 200))
     if m in ("mean_reversion", "reversion", "fade"):
         return mean_reversion_signals(df, prefix=prefix)
     if m in ("percentb", "percent_b", "pb"):
